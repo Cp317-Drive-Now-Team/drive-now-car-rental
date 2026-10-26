@@ -1,3 +1,5 @@
+CREATE DATABASE  IF NOT EXISTS `drivenow_db` /*!40100 DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci */ /*!80016 DEFAULT ENCRYPTION='N' */;
+USE `drivenow_db`;
 -- MySQL dump 10.13  Distrib 8.0.43, for Win64 (x86_64)
 --
 -- Host: 127.0.0.1    Database: drivenow_db
@@ -166,7 +168,7 @@ CREATE TABLE `users` (
   PRIMARY KEY (`user_id`),
   UNIQUE KEY `email` (`email`),
   UNIQUE KEY `driver_license_number` (`driver_license_number`)
-) ENGINE=InnoDB AUTO_INCREMENT=3 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+) ENGINE=InnoDB AUTO_INCREMENT=5 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 --
@@ -175,7 +177,7 @@ CREATE TABLE `users` (
 
 LOCK TABLES `users` WRITE;
 /*!40000 ALTER TABLE `users` DISABLE KEYS */;
-INSERT INTO `users` VALUES (1,'Admin','Staff','admin@drivenow.com','$2b$12$E...mockhash...',NULL,NULL,'Administrator','2026-10-23 16:53:29'),(2,'Alex','Morgan','alex.morgan@example.com','$2b$12$E...mockhash...',NULL,'DL-987654321','Customer','2026-10-23 16:53:29');
+INSERT INTO `users` VALUES (1,'Admin','Staff','admin@drivenow.com','$2b$12$E...mockhash...',NULL,NULL,'Administrator','2026-10-23 16:53:29'),(2,'Alex','Morgan','alex.morgan@example.com','$2b$12$E...mockhash...',NULL,'DL-987654321','Customer','2026-10-23 16:53:29'),(3,'Admin','Manager','admin.staff@drivenow.com','$2b$12$MockAdminHashPlaceholderForTestingOnly12345','519-555-0100',NULL,'Administrator','2026-10-26 20:50:57'),(4,'Jane','Doe','jane.doe@example.com','$2b$12$MockCustomerHashPlaceholderForTestingOnly67890','519-555-0199','DL-123456789-ON','Customer','2026-10-26 20:50:57');
 /*!40000 ALTER TABLE `users` ENABLE KEYS */;
 UNLOCK TABLES;
 /*!40103 SET TIME_ZONE=@OLD_TIME_ZONE */;
@@ -188,4 +190,4 @@ UNLOCK TABLES;
 /*!40101 SET COLLATION_CONNECTION=@OLD_COLLATION_CONNECTION */;
 /*!40111 SET SQL_NOTES=@OLD_SQL_NOTES */;
 
--- Dump completed on 2026-10-23 13:24:06
+-- Dump completed on 2026-10-26 16:55:48
