@@ -6,7 +6,7 @@ DriveNow is a comprehensive car rental management application designed to stream
 ---
 
 ## Team & Roles (Group 22)
-* **Aryan Kainth** – Scrum Master & Dataset Designer / Backend Integration
+* **Aryan Kainth** – Scrum Master & Dataset Designer
 * **Albina Qureshi** – Backend Developer
 * **Sadaf Faizi** – Frontend Developer & Product Backlog
 * **Dheeraj Bashal** – Product Owner & Requirements Analyst
