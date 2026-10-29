@@ -1,4 +1,4 @@
-# DriveNow Car Rental Management System
+# DriveNow Car Rental Management System (Subject to changes)
 
 ## Overview
 DriveNow is a comprehensive car rental management application designed to streamline vehicle browsing, customer account registration, secure reservations, and administrative fleet control. Developed as part of CP317 Software Engineering, this project utilizes a Python-based user interface, a secure MySQL relational database backend, and role-based access control.
