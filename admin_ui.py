@@ -80,7 +80,7 @@ class AdminWindow:
         holder.pack(side=tk.LEFT, fill=tk.BOTH, expand=True, padx=(0, 18))
         headings = [("id", "ID", 36), ("year", "Year", 50), ("make", "Make", 80), ("model", "Model", 90),
                     ("type", "Type", 70), ("rate", "Price / Day", 80), ("status", "Status", 90),
-                    ("location", "Location", 190)]
+                    ("listed", "Listed", 70), ("location", "Location", 170)]
         self.table = ttk.Treeview(holder, columns=[h[0] for h in headings], show="headings", selectmode="browse")
         for key, title, width in headings:
             self.table.heading(key, text=title)
@@ -153,8 +153,9 @@ class AdminWindow:
             rows = []
             for car in list_all_cars(session, self.user["user_id"]):
                 location = car.location.location_name if car.location else ""
+                listed = "Yes" if car.is_active else "Removed"
                 rows.append((car.car_id, car.year, car.make, car.model, car.car_type, f"${car.daily_rate:.2f}",
-                             car.status, location))
+                             car.status, listed, location))
         except Exception as e:
             messagebox.showerror("Error", f"Could not load cars:\n{e}", parent=self.window)
             return
@@ -170,7 +171,7 @@ class AdminWindow:
         selected = self.table.selection()
         if not selected:
             return
-        car_id, year, make, model, car_type, rate, status, location = self.table.item(selected[0])["values"]
+        car_id, year, make, model, car_type, rate, status, listed, location = self.table.item(selected[0])["values"]
         self.selected_car_id = int(car_id)
         values = {"make": make, "model": model, "year": year, "car_type": car_type,
                   "daily_rate": str(rate).lstrip("$"), "status": status, "location": location}
