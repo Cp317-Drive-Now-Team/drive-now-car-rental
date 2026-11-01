@@ -8,9 +8,8 @@ from security import register_user, authenticate_user
 from browse_ui import BrowseWindow
 from admin_ui import AdminWindow
 
-# Database Connection Configuration (Pulls directly from your local MySQL instance)
-# Replace root:1234567890! with your password you set when setting up mysql.
-DATABASE_URL = "mysql+pymysql://root:1234567890!@localhost:3306/drivenow_db"
+# Database connection comes from config.py (copy config.example.py to config.py and set your own password)
+from config import DATABASE_URL
 
 engine = create_engine(DATABASE_URL, echo=False)
 SessionLocal = sessionmaker(bind=engine)
@@ -76,6 +75,7 @@ class DriveNowApp:
         self.password_entry.bind("<Return>", lambda event: self.handle_login())
         self.email_entry.focus_set()
 
+    # ---------------- LOGIN (ACC-02.3) ----------------
     def handle_login(self):
         """Sign In (ACC-02)"""
         email = self.email_entry.get().strip().lower()
@@ -210,7 +210,7 @@ class DriveNowApp:
                     messagebox.showinfo("Success", "Account created successfully! You can now sign in.", parent=signup_window)
                     signup_window.destroy()
                 else:
-                    messagebox.showerror("Registration Failed", f"Could not register user:\n{msg}", parent=signup_window)
+                    messagebox.showerror("Registration Failed", msg, parent=signup_window)
             except Exception as e:
                 messagebox.showerror("Error", f"An error occurred: {e}", parent=signup_window)
             finally:
@@ -257,6 +257,7 @@ def check_signup_fields(first_name, last_name, email, phone, password, confirm):
 
 def email_taken(session, email):
     return session.query(User).filter(func.lower(User.email) == email.lower()).first() is not None
+
 
 
 if __name__ == "__main__":
