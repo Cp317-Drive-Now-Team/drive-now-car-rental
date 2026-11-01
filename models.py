@@ -1,5 +1,5 @@
 from sqlalchemy import (
-    Column, Integer, String, Numeric, Enum, DateTime, Date, ForeignKey, Index, Text
+    Column, Integer, String, Numeric, Enum, DateTime, Date, ForeignKey, Index, Text, Boolean
 )
 from sqlalchemy.orm import declarative_base, relationship
 from datetime import datetime
@@ -50,6 +50,7 @@ class Car(Base):
     daily_rate = Column(Numeric(10, 2), nullable=False)
     status = Column(Enum('Available', 'Rented', 'Maintenance'), nullable=False, default='Available')
     location_id = Column(Integer, ForeignKey('locations.location_id', ondelete='RESTRICT'), nullable=False)
+    is_active = Column(Boolean, nullable=False, default=True)  # False = removed from fleet
 
     # Relationships
     location = relationship("Location", back_populates="cars")

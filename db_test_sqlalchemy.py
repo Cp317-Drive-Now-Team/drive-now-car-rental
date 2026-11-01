@@ -1,10 +1,10 @@
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 from models import User, Car, Location, Payment, Reservation
+from config import DATABASE_URL
 
-# 1. Database Configuration
-# Replace root:1234567890! with your password you set when setting up mysql.
-DATABASE_URL = "mysql+pymysql://root:1234567890!@localhost:3306/drivenow_db"
+
+
 
 # SQLAlchemy Engine and Session setup
 engine = create_engine(DATABASE_URL, echo=False)
@@ -34,7 +34,7 @@ def run_database_tests():
         print(f"\n[Vehicle Inventory Found: {len(cars)} vehicles]")
         for car in cars:
             print(f" -> [{car.car_id}] {car.year} {car.make} {car.model} "
-                  f"({car.car_type}) - ${car.daily_rate}/day [Status: {car.status}]")
+                    f"({car.car_type}) - ${car.daily_rate}/day [Status: {car.status}]")
 
         # Test 4: Example Filter Query (Available SUVs)
         suvs = session.query(Car).filter(Car.car_type == 'SUV', Car.status == 'Available').all()
