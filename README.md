@@ -38,7 +38,7 @@ The relational schema comprises five core tables designed with strict referentia
 ### 1. Database Setup (MySQL Workbench)
 1. Open **MySQL Workbench** and connect to your local MySQL server instance.
 2. Open a new SQL query tab.
-3. Import or run your self-contained `.sql` database dump file (e.g., `drivenow_seed_data.sql`) to automatically create the `drivenow_db` schema, tables, indexes, and initial test data (including branch locations, test admin/customer accounts, and the vehicle inventory).
+3. Import or run THE self-contained `.sql` database dump file `Drivenow_db with data.sql` & the `add_is_active.sql` to automatically create the `drivenow_db` schema, tables, indexes, and initial test data (including branch locations, test admin/customer accounts, and the vehicle inventory).
 
 ### 2. Running the Python Application UI
 1. Ensure you have **Python 3.x** installed on your system.
