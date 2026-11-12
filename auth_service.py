@@ -3,7 +3,7 @@ from dataclasses import dataclass
 from typing import Optional
 from sqlalchemy.orm import Session
 from werkzeug.security import check_password_hash, generate_password_hash
-from models import User
+from models import User, Reservation
 
 # Same message for wrong email AND wrong password (required).
 INVALID_MSG = "Invalid email or password."
@@ -85,3 +85,28 @@ def can_access(page: str) -> bool:
 def require_access(page: str):
     if not can_access(page):
         raise PermissionError("You do not have access to this page.")
+
+
+def update_rental_status_secure(db_session, reservation_id, new_status):
+    """
+    ADMIN-02.3: Enforces a backend check using app_session 
+    to ensure ONLY administrators can save reservation status changes.
+    """
+    # 1. Check the active session to verify the logged-in user's role
+    if not app_session.is_logged_in or app_session.user.role != 'Administrator':
+        print(f"SECURITY ALERT: Unauthorized attempt to modify rental status.")
+        return False, "Access Denied: Only administrators are allowed to modify rental statuses."
+    
+    # 2. Find the reservation in the database
+    reservation = db_session.query(Reservation).filter(Reservation.reservation_id == reservation_id).first()
+    if not reservation:
+        return False, "Reservation not found."
+        
+    # 3. Perform the update (Save)
+    try:
+        reservation.status = new_status
+        db_session.commit()
+        return True, f"Reservation {reservation_id} updated to '{new_status}' successfully."
+    except Exception as e:
+        db_session.rollback()
+        return False, f"Database error: {str(e)}"

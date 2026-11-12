@@ -3,6 +3,7 @@ from tkinter import messagebox, ttk
 from datetime import date
 from decimal import Decimal, InvalidOperation
 from car_admin import add_car, update_car, remove_car, list_all_cars, list_locations, CAR_STATUSES
+from auth_service import update_rental_status_secure
 
 # Colours (greyscale to match the wireframes)
 WHITE = "#FFFFFF"
@@ -267,3 +268,27 @@ class AdminWindow:
         self.form_title.config(text="Add a New Car")
         if not keep_message:
             self.status_label.config(text="")
+
+    def handle_rental_status_update(self, reservation_id, new_status):
+        """
+        ADMIN-02.3
+        Called when an admin updates a booking status in the management panel.
+
+        """
+        # Open a database session
+        session = self.app.Session()
+        try:
+            # Call the secure backend function
+            success, message = update_rental_status_secure(session, reservation_id, new_status)
+            
+            if success:
+                messagebox.showinfo("Success", message, parent=self.window)
+                # self.load_rentals()  # Refresh your UI view here
+            else:
+                # Successfully blocks customers attempting to bypass UI controls
+                messagebox.showerror("Access Denied", message, parent=self.window)
+                
+        except Exception as e:
+            messagebox.showerror("Error", f"An unexpected error occurred: {e}", parent=self.window)
+        finally:
+            session.close()
