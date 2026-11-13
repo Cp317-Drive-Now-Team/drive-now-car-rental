@@ -1,3 +1,4 @@
+import os
 import tkinter as tk
 from tkinter import messagebox, ttk
 from datetime import date, datetime
@@ -34,6 +35,31 @@ def draw_car(canvas, x, y, size, colour=TEXT, bg=WHITE):
                            fill=bg, outline=bg)
         canvas.create_oval(x + size * (wheel - 0.08), y + size * 0.56, x + size * (wheel + 0.08), y + size * 0.72,
                            fill=colour, outline=colour)
+
+
+# Car photos go in the images folder, named by car ID: images/car_1.png, images/car_2.png, ...
+IMAGES_FOLDER = os.path.join(os.path.dirname(os.path.abspath(__file__)), "images")
+
+
+def car_photo(parent, car_id, max_width, max_height, bg=WHITE):
+    """
+    Shows the car's photo if there is one in the images folder (CAR-01 card photo).
+    If there is no photo yet, it shows the drawn car instead so the page still looks okay.
+    """
+    path = os.path.join(IMAGES_FOLDER, f"car_{car_id}.png")
+    if os.path.exists(path):
+        try:
+            photo = tk.PhotoImage(file=path)
+            # PhotoImage can only shrink by whole numbers, so shrink until it fits the space
+            shrink = max(1, -(-photo.width() // max_width), -(-photo.height() // max_height))
+            if shrink > 1:
+                photo = photo.subsample(shrink)
+            label = tk.Label(parent, image=photo, bg=bg)
+            label.image = photo  # keep a reference or tkinter throws the picture away
+            return label
+        except tk.TclError:
+            pass  # not a real PNG file, so use the drawing instead
+    return car_picture(parent, int(max_width * 0.6), bg=bg)
 
 
 def car_picture(parent, size, bg=WHITE):
@@ -349,7 +375,7 @@ class BrowseWindow:
             card = tk.Frame(self.cards_frame, bg=WHITE, padx=10, pady=12, highlightthickness=1,
                             highlightbackground=BORDER, cursor="hand2")
             card.grid(row=i // CARDS_PER_ROW, column=i % CARDS_PER_ROW, sticky="nsew", padx=6, pady=6)
-            car_picture(card, 100).pack()
+            car_photo(card, car["id"], 170, 100).pack()
             tk.Label(card, text=f"{car['make']} {car['model']}", font=("Arial", 11, "bold"), bg=WHITE, fg=TEXT).pack(pady=(5, 0))
             tk.Label(card, text=f"{car['year']} | {car['type']}", font=("Arial", 9), bg=WHITE, fg=TEXT).pack()
             tk.Label(card, text=car["city"], font=("Arial", 9), bg=WHITE, fg=MUTED).pack()
@@ -401,10 +427,10 @@ class BrowseWindow:
         # Left side - picture and vehicle info
         left = tk.Frame(columns, bg=WHITE)
         left.grid(row=0, column=0, sticky="nsew", padx=(0, 25))
-        picture = tk.Frame(left, bg="#F2F2F2", height=180, highlightthickness=1, highlightbackground=BORDER)
+        picture = tk.Frame(left, bg="#F2F2F2", height=250, highlightthickness=1, highlightbackground=BORDER)
         picture.pack(fill=tk.X)
         picture.pack_propagate(False)
-        car_picture(picture, 190, bg="#F2F2F2").place(relx=0.5, rely=0.5, anchor="center")
+        car_photo(picture, car["id"], 480, 240, bg="#F2F2F2").place(relx=0.5, rely=0.5, anchor="center")
 
         name_row = tk.Frame(left, bg=WHITE)
         name_row.pack(fill=tk.X, pady=(12, 0))
