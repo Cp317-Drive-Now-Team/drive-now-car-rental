@@ -1,154 +1,261 @@
+import re
 import tkinter as tk
 from tkinter import messagebox
-from sqlalchemy import create_engine
+from sqlalchemy import create_engine, func
 from sqlalchemy.orm import sessionmaker
+from models import User
+from security import register_user, authenticate_user
+from browse_ui import BrowseWindow
+from admin_ui import AdminWindow
 
+# Database connection comes from config.py (copy config.example.py to config.py and set your own password)
 from config import DATABASE_URL
-from account_service import register_customer
-from auth_service import login, app_session
-from car_listing import get_active_cars
 
 engine = create_engine(DATABASE_URL, echo=False)
 SessionLocal = sessionmaker(bind=engine)
+
+# Colours used on every screen (greyscale to match the wireframes)
+WHITE = "#FFFFFF"
+DARK = "#3F3F3F"
+TEXT = "#1F1F1F"
+MUTED = "#6B6B6B"
+RED = "#B00020"
 
 
 class DriveNowApp:
     def __init__(self, root):
         self.root = root
-        self.root.title("DriveNow Car Rental - Login")
-        self.root.geometry("500x230")
-        self.root.resizable(False, False)
+        self.Session = SessionLocal  # the other screens use this to talk to the database
+        self.current_window = None
 
-        main_frame = tk.Frame(root, padx=20, pady=20)
+        self.root.title("DriveNow Car Rentals - Sign In")
+        self.root.geometry("460x440")
+        self.root.resizable(False, False)
+        self.root.configure(bg=WHITE)
+
+        # Header
+        header = tk.Frame(root, bg=WHITE, padx=30, pady=15)
+        header.pack(fill=tk.X)
+        tk.Label(header, text="Drive Now", font=("Arial", 14, "bold"), bg=WHITE, fg=TEXT).pack(anchor="w")
+        tk.Label(header, text="Car Rentals", font=("Arial", 9), bg=WHITE, fg=MUTED).pack(anchor="w")
+        tk.Frame(root, bg="#D0D0D0", height=1).pack(fill=tk.X)
+
+        # Main Frame Container
+        main_frame = tk.Frame(root, bg=WHITE, padx=40, pady=20)
         main_frame.pack(fill=tk.BOTH, expand=True)
 
-        tk.Label(main_frame, text="Welcome to DriveNow", font=("Arial", 14, "bold")).grid(
-            row=0, column=0, columnspan=2, pady=(0, 15))
+        tk.Label(main_frame, text="Sign In", font=("Arial", 20, "bold"), bg=WHITE, fg=TEXT).pack(anchor="w")
+        tk.Label(main_frame, text="Welcome back! Sign in to find your next rental.", font=("Arial", 9),
+                 bg=WHITE, fg=MUTED).pack(anchor="w", pady=(0, 15))
 
-        tk.Label(main_frame, text="Email / Username:", font=("Arial", 10)).grid(row=1, column=0, sticky="w", pady=5)
-        self.email_entry = tk.Entry(main_frame, width=30)
-        self.email_entry.grid(row=1, column=1, pady=5)
+        # Email Field
+        tk.Label(main_frame, text="Email", font=("Arial", 11), bg=WHITE, fg=TEXT).pack(anchor="w")
+        self.email_entry = tk.Entry(main_frame, font=("Arial", 11), relief="solid", bd=1)
+        self.email_entry.pack(fill=tk.X, ipady=4, pady=(2, 10))
 
-        tk.Label(main_frame, text="Password:", font=("Arial", 10)).grid(row=2, column=0, sticky="w", pady=5)
-        self.password_entry = tk.Entry(main_frame, width=30, show="*")
-        self.password_entry.grid(row=2, column=1, pady=5)
+        # Password Field
+        tk.Label(main_frame, text="Password", font=("Arial", 11), bg=WHITE, fg=TEXT).pack(anchor="w")
+        self.password_entry = tk.Entry(main_frame, font=("Arial", 11), relief="solid", bd=1, show="*")
+        self.password_entry.pack(fill=tk.X, ipady=4, pady=(2, 4))
 
-        button_frame = tk.Frame(main_frame)
-        button_frame.grid(row=3, column=0, columnspan=2, pady=(15, 0))
+        # Error message shows here instead of a popup
+        self.login_error = tk.Label(main_frame, text="", font=("Arial", 9), bg=WHITE, fg=RED)
+        self.login_error.pack(anchor="w", pady=(0, 8))
 
-        tk.Button(button_frame, text="Login", width=10, bg="#007ACC", fg="white",
-                  command=self.handle_login).pack(side=tk.LEFT, padx=5)
-        tk.Button(button_frame, text="Sign Up (Renter)", width=15, bg="#28A745", fg="white",
-                  command=self.handle_signup).pack(side=tk.LEFT, padx=5)
+        # Buttons (Sign In & Create Account)
+        tk.Button(main_frame, text="Sign In", font=("Arial", 11, "bold"), bg=DARK, fg="white",
+                  command=self.handle_login).pack(fill=tk.X, ipady=3)
+        tk.Label(main_frame, text="Don't have an account?", font=("Arial", 9), bg=WHITE,
+                 fg=MUTED).pack(pady=(12, 3))
+        tk.Button(main_frame, text="Create Account", font=("Arial", 11), bg=WHITE, fg=TEXT,
+                  command=self.handle_signup).pack(fill=tk.X, ipady=3)
 
-    # ---------------- LOGIN (ACC-02.3) ----------------
+        # Pressing Enter also signs in
+        self.email_entry.bind("<Return>", lambda event: self.handle_login())
+        self.password_entry.bind("<Return>", lambda event: self.handle_login())
+        self.email_entry.focus_set()
+
     def handle_login(self):
-        email = self.email_entry.get().strip()
-        password = self.password_entry.get().strip()
+        """Sign In (ACC-02)"""
+        email = self.email_entry.get().strip().lower()
+        password = self.password_entry.get()
+        self.login_error.config(text="")
 
         if not email or not password:
-            messagebox.showerror("Error", "Please fill in all fields.")
+            self.login_error.config(text="Please enter your email and password.")
             return
 
         session = SessionLocal()
         try:
-            ok, msg, home = login(session, email, password)
+            # Authenticate against MySQL database using security.py
+            user = authenticate_user(session, email, password)
 
-            if ok:
-                user = app_session.user
-                messagebox.showinfo("Success", f"Login successful!\nWelcome back, {user.first_name} ({user.role})")
+            if not user:
+                # Same message for a wrong email or a wrong password, so nobody can guess which emails have accounts
+                self.login_error.config(text="Invalid email or password.")
+                self.password_entry.delete(0, tk.END)
+                return
 
-                if home == "customer_home":
-                    self.open_car_browser_window(session, user)
-                # elif home == "admin_dashboard":
-                #     Aryan opens the admin page here
-            else:
-                messagebox.showwarning("Login Failed", msg)  # "Invalid email or password."
+            user_info = {"user_id": user.user_id, "first_name": user.first_name, "role": user.role}
         except Exception as e:
             messagebox.showerror("Database Error", f"Could not connect to database:\n{e}")
+            return
         finally:
             session.close()
 
-    # ---------------- SIGN UP (ACC-01.3) ----------------
+        # Hide the sign in window and open the right screen for the role
+        self.password_entry.delete(0, tk.END)
+        self.root.withdraw()
+        if user_info["role"] == 'Administrator':
+            self.current_window = AdminWindow(self, user_info)
+        else:
+            self.current_window = BrowseWindow(self, user_info)
+
+    def logout(self, window):
+        """Logout (ACC-02) - closes the current screen and goes back to sign in"""
+        if not messagebox.askyesno("Logout", "Are you sure you want to log out?", parent=window):
+            return
+        window.destroy()
+        self.current_window = None
+        self.email_entry.delete(0, tk.END)
+        self.password_entry.delete(0, tk.END)
+        self.login_error.config(text="")
+        self.root.deiconify()
+        self.email_entry.focus_set()
+
     def handle_signup(self):
+        """Create Account form (ACC-01). Name, email, phone and password are required."""
         signup_window = tk.Toplevel(self.root)
-        signup_window.title("Renter Sign Up")
-        signup_window.geometry("400x400")
+        signup_window.title("DriveNow - Create Account")
+        signup_window.geometry("520x540")
         signup_window.resizable(False, False)
+        signup_window.configure(bg=WHITE)
+        signup_window.grab_set()
 
-        tk.Label(signup_window, text="Create Renter Account", font=("Arial", 12, "bold")).pack(pady=10)
+        form = tk.Frame(signup_window, bg=WHITE, padx=35, pady=20)
+        form.pack(fill=tk.BOTH, expand=True)
+        tk.Label(form, text="Create Your Account", font=("Arial", 18, "bold"), bg=WHITE, fg=TEXT).grid(
+            row=0, column=0, columnspan=2, sticky="w")
+        tk.Label(form, text="Fields marked with * are required.", font=("Arial", 9), bg=WHITE, fg=MUTED).grid(
+            row=1, column=0, columnspan=2, sticky="w", pady=(0, 10))
+        form.columnconfigure(0, weight=1, uniform="col")
+        form.columnconfigure(1, weight=1, uniform="col")
 
-        tk.Label(signup_window, text="First Name:").pack(anchor="w", padx=40)
-        fn_entry = tk.Entry(signup_window, width=32)
-        fn_entry.pack(padx=40, pady=2)
+        # (field name, label, row, column, hide text?)
+        fields = [
+            ("first_name", "First Name *", 2, 0, False),
+            ("last_name", "Last Name *", 2, 1, False),
+            ("email", "Email *", 5, 0, False),
+            ("phone", "Phone Number *", 5, 1, False),
+            ("password", "Password * (8+ characters)", 8, 0, True),
+            ("confirm", "Confirm Password *", 8, 1, True),
+            ("licence", "Driver's Licence Number", 11, 0, False),
+        ]
+        self.signup_entries = {}
+        self.signup_errors = {}
+        for name, label, row, col, hidden in fields:
+            pad = (0, 10) if col == 0 else (10, 0)
+            tk.Label(form, text=label, font=("Arial", 11), bg=WHITE, fg=TEXT).grid(row=row, column=col, sticky="w", padx=pad)
+            entry = tk.Entry(form, font=("Arial", 11), relief="solid", bd=1, show="*" if hidden else "")
+            entry.grid(row=row + 1, column=col, sticky="ew", ipady=3, padx=pad)
+            error = tk.Label(form, text="", font=("Arial", 9), bg=WHITE, fg=RED)
+            error.grid(row=row + 2, column=col, sticky="w", padx=pad, pady=(0, 4))
+            self.signup_entries[name] = entry
+            self.signup_errors[name] = error
 
-        tk.Label(signup_window, text="Last Name:").pack(anchor="w", padx=40)
-        ln_entry = tk.Entry(signup_window, width=32)
-        ln_entry.pack(padx=40, pady=2)
+        entries = self.signup_entries
+        errors = self.signup_errors
 
-        tk.Label(signup_window, text="Email:").pack(anchor="w", padx=40)
-        su_email = tk.Entry(signup_window, width=32)
-        su_email.pack(padx=40, pady=2)
+        def submit_account():
+            first_name = entries["first_name"].get().strip()
+            last_name = entries["last_name"].get().strip()
+            email = entries["email"].get().strip().lower()
+            phone = entries["phone"].get().strip()
+            password = entries["password"].get()
+            confirm = entries["confirm"].get()
+            licence = entries["licence"].get().strip()
 
-        tk.Label(signup_window, text="Password (min 8 characters):").pack(anchor="w", padx=40)
-        su_pass = tk.Entry(signup_window, width=32, show="*")
-        su_pass.pack(padx=40, pady=2)
+            for label in errors.values():
+                label.config(text="")
+            problems = check_signup_fields(first_name, last_name, email, phone, password, confirm)
 
-        tk.Label(signup_window, text="Driver's License Number:").pack(anchor="w", padx=40)
-        dl_entry = tk.Entry(signup_window, width=32)
-        dl_entry.pack(padx=40, pady=2)
-
-        def submit_renter():
             session = SessionLocal()
             try:
-                success, msg = register_customer(
+                # Only 1 account per email
+                if "email" not in problems and email_taken(session, email):
+                    problems["email"] = "An account with this email already exists."
+                if licence and session.query(User).filter(User.driver_license_number == licence).first():
+                    problems["licence"] = "This licence number is already registered."
+
+                if problems:
+                    for name, message in problems.items():
+                        errors[name].config(text=message)
+                    return
+
+                # Register user using security.py (hashes password and commits to MySQL)
+                digits = phone_digits(phone)
+                success, msg = register_user(
                     session=session,
-                    first_name=fn_entry.get().strip(),
-                    last_name=ln_entry.get().strip(),
-                    email=su_email.get().strip(),
-                    password=su_pass.get(),
-                    driver_license=dl_entry.get().strip() or None,
+                    first_name=first_name,
+                    last_name=last_name,
+                    email=email,
+                    plain_password=password,
+                    role='Customer',  # sign up only makes customers, admins are added by the team
+                    driver_license=licence if licence else None,
+                    phone=f"{digits[0:3]}-{digits[3:6]}-{digits[6:]}"
                 )
 
                 if success:
-                    messagebox.showinfo("Success", "Account created! You can now log in.", parent=signup_window)
+                    messagebox.showinfo("Success", "Account created successfully! You can now sign in.", parent=signup_window)
                     signup_window.destroy()
                 else:
-                    messagebox.showerror("Registration Failed", msg, parent=signup_window)
+                    messagebox.showerror("Registration Failed", f"Could not register user:\n{msg}", parent=signup_window)
             except Exception as e:
                 messagebox.showerror("Error", f"An error occurred: {e}", parent=signup_window)
             finally:
                 session.close()
 
-        tk.Button(signup_window, text="Register as Renter", bg="#28A745", fg="white",
-                  font=("Arial", 10, "bold"), command=submit_renter).pack(pady=15)
+        self.submit_account = submit_account
+        tk.Button(form, text="Create Account", font=("Arial", 11, "bold"), bg=DARK, fg="white",
+                  command=submit_account).grid(row=14, column=0, columnspan=2, sticky="ew", ipady=3, pady=(10, 0))
+        signup_window.bind("<Return>", lambda event: submit_account())
+        entries["first_name"].focus_set()
+        self.signup_window = signup_window
 
-    # ---------------- CAR LIST (CAR-01.3) ----------------
-    def open_car_browser_window(self, session, user):
-        car_window = tk.Toplevel(self.root)
-        car_window.title("DriveNow - Available Vehicles")
-        car_window.geometry("600x350")
 
-        tk.Label(car_window, text=f"Welcome, {user.first_name}! Browse Available Fleet:",
-                 font=("Arial", 12, "bold")).pack(pady=10)
+def phone_digits(phone):
+    # Keeps only the numbers, so 519-555-0199 and (519) 555 0199 both work
+    digits = re.sub(r"\D", "", phone)
+    if len(digits) == 11 and digits.startswith("1"):
+        digits = digits[1:]
+    return digits
 
-        frame = tk.Frame(car_window)
-        frame.pack(fill=tk.BOTH, expand=True, padx=20, pady=10)
 
-        scrollbar = tk.Scrollbar(frame)
-        scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
+def check_signup_fields(first_name, last_name, email, phone, password, confirm):
+    """Returns a dictionary of {field: error message}. Empty means everything is okay."""
+    problems = {}
+    values = {"first_name": first_name, "last_name": last_name, "email": email, "phone": phone,
+              "password": password, "confirm": confirm}
+    for name, value in values.items():
+        if not value:
+            problems[name] = "This field is required."
 
-        car_listbox = tk.Listbox(frame, yscrollcommand=scrollbar.set, width=80, font=("Courier", 10))
+    for name in ("first_name", "last_name"):
+        if name not in problems and not re.match(r"^[A-Za-z][A-Za-z '\-]*$", values[name]):
+            problems[name] = "Use letters only."
+    if "email" not in problems and not re.match(r"^[^@\s]+@[^@\s]+\.[^@\s]+$", email):
+        problems["email"] = "Enter a valid email address."
+    if "phone" not in problems and len(phone_digits(phone)) != 10:
+        problems["phone"] = "Enter a valid 10-digit phone number."
+    if "password" not in problems and len(password) < 8:
+        problems["password"] = "Password must be at least 8 characters."
+    if "password" not in problems and "confirm" not in problems and password != confirm:
+        problems["confirm"] = "Passwords do not match."
+    return problems
 
-        for car in get_active_cars(session):
-            car_listbox.insert(
-                tk.END,
-                f"[{car.car_id}] {car.year} {car.make} {car.model} ({car.car_type}) - ${car.daily_rate}/day")
 
-        car_listbox.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
-        scrollbar.config(command=car_listbox.yview)
-
-        tk.Button(car_window, text="Close", command=car_window.destroy).pack(pady=10)
+def email_taken(session, email):
+    return session.query(User).filter(func.lower(User.email) == email.lower()).first() is not None
 
 
 if __name__ == "__main__":
