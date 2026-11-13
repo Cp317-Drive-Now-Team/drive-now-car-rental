@@ -2,6 +2,10 @@ import tkinter as tk
 from tkinter import messagebox, ttk
 from datetime import date, datetime
 from car_search import get_filter_options, get_locations, search_cars, SORT_OPTIONS
+from booking_service import create_booking
+import booking_rules
+import payment_rules
+import booking_ui
 
 # Colours (greyscale to match the wireframes)
 WHITE = "#FFFFFF"
@@ -84,7 +88,7 @@ class BrowseWindow:
         self.app = app
         self.user = user
         self.dates = (None, None)  # dates from the last search, so the details page can fill them in
-        self.details_frame = None
+        self.page = None  # the page shown instead of the browse page (details, booking, payment, receipt, My Bookings)
 
         self.window = tk.Toplevel(app.root)
         self.window.title("DriveNow - Browse Cars")
@@ -117,13 +121,15 @@ class BrowseWindow:
 
         tk.Button(nav, text="Logout", font=("Arial", 11), bg=WHITE, fg=TEXT,
                   command=lambda: self.app.logout(self.window)).pack(side=tk.RIGHT, padx=(15, 0))
-        # My Bookings and My Account are Sprint 3 (ACC-03), so they show a message for now
+        # My Account is Sprint 3 (ACC-03), so it shows a message for now. My Bookings has a basic version (RENT-02).
         for page in ["My Account", "My Bookings", "Browse Cars", "Home"]:
             link = tk.Label(nav, text=page, font=("Arial", 12, "bold" if page == "Browse Cars" else "normal"),
                             bg=WHITE, fg=TEXT, cursor="hand2")
             link.pack(side=tk.RIGHT, padx=12)
             if page in ("Home", "Browse Cars"):
                 link.bind("<Button-1>", lambda event: self.back_to_search())
+            elif page == "My Bookings":
+                link.bind("<Button-1>", lambda event: booking_ui.show_my_bookings(self))
             else:
                 link.bind("<Button-1>", lambda event, p=page: messagebox.showinfo(
                     p, "This page will be added in a later sprint.", parent=self.window))
@@ -320,9 +326,12 @@ class BrowseWindow:
             # Copy what we need before the session closes
             results = []
             for car in cars:
+                loc = car.location
                 results.append({"id": car.car_id, "make": car.make, "model": car.model, "type": car.car_type,
                                 "year": car.year, "rate": car.daily_rate,
-                                "location": car.location.location_name if car.location else ""})
+                                "location": loc.location_name if loc else "",
+                                "city": f"{loc.city}, {loc.state_province}" if loc else "",
+                                "address": f"{loc.address}, {loc.city}, {loc.state_province} {loc.postal_code}" if loc else ""})
         except Exception as e:
             messagebox.showerror("Database Error", f"Could not load cars:\n{e}", parent=self.window)
             return
@@ -342,8 +351,9 @@ class BrowseWindow:
             card.grid(row=i // CARDS_PER_ROW, column=i % CARDS_PER_ROW, sticky="nsew", padx=6, pady=6)
             car_picture(card, 100).pack()
             tk.Label(card, text=f"{car['make']} {car['model']}", font=("Arial", 11, "bold"), bg=WHITE, fg=TEXT).pack(pady=(5, 0))
-            tk.Label(card, text=f"{car['type']} | {car['year']}", font=("Arial", 9), bg=WHITE, fg=TEXT).pack()
-            tk.Label(card, text=f"${car['rate']:.0f}/day", font=("Arial", 11, "bold"), bg=BANNER, fg=TEXT,
+            tk.Label(card, text=f"{car['year']} | {car['type']}", font=("Arial", 9), bg=WHITE, fg=TEXT).pack()
+            tk.Label(card, text=car["city"], font=("Arial", 9), bg=WHITE, fg=MUTED).pack()
+            tk.Label(card, text=f"${car['rate']:.2f} / day", font=("Arial", 11, "bold"), bg=BANNER, fg=TEXT,
                      padx=14, pady=4).pack(pady=(8, 0))
             if days:
                 tk.Label(card, text=f"Est. ${car['rate'] * days:.2f} for {days} days", font=("Arial", 9),
@@ -365,17 +375,20 @@ class BrowseWindow:
                 text += f" for {days} days"
             self.result_label.config(text=text, fg=TEXT)
 
-    def open_details(self, car):
-        """Car Details & Booking page (CAR-03) based on Wireframe 2. Book Now is a placeholder until Sprint 2."""
+    def new_page(self, title):
+        """Hides the browse page (or the last page) and returns an empty frame for the next page"""
         self.browse_frame.pack_forget()
-        if self.details_frame is not None:
-            self.details_frame.destroy()
-        self.window.title(f"DriveNow - {car['make']} {car['model']}")
-        self.details_car = car
+        if self.page is not None:
+            self.page.destroy()
+        self.window.title(f"DriveNow - {title}")
+        self.page = tk.Frame(self.window, bg=WHITE, padx=40, pady=20)
+        self.page.pack(fill=tk.BOTH, expand=True)
+        return self.page
 
-        page = tk.Frame(self.window, bg=WHITE, padx=40, pady=20)
-        page.pack(fill=tk.BOTH, expand=True)
-        self.details_frame = page
+    def open_details(self, car):
+        """Car Details & Booking page (CAR-03) based on Wireframe 2. Book Now creates the booking (RENT-01)."""
+        page = self.new_page(f"{car['make']} {car['model']}")
+        self.details_car = car
         tk.Label(page, text="Car Details & Booking", font=("Arial", 20, "bold"), bg=WHITE, fg=TEXT).pack(anchor="w")
         tk.Label(page, text="Review your selected vehicle and enter your rental details to make a reservation.",
                  font=("Arial", 9), bg=WHITE, fg=MUTED).pack(anchor="w", pady=(0, 12))
@@ -388,35 +401,39 @@ class BrowseWindow:
         # Left side - picture and vehicle info
         left = tk.Frame(columns, bg=WHITE)
         left.grid(row=0, column=0, sticky="nsew", padx=(0, 25))
-        picture = tk.Frame(left, bg="#F2F2F2", height=200, highlightthickness=1, highlightbackground=BORDER)
+        picture = tk.Frame(left, bg="#F2F2F2", height=180, highlightthickness=1, highlightbackground=BORDER)
         picture.pack(fill=tk.X)
         picture.pack_propagate(False)
-        car_picture(picture, 210, bg="#F2F2F2").place(relx=0.5, rely=0.5, anchor="center")
+        car_picture(picture, 190, bg="#F2F2F2").place(relx=0.5, rely=0.5, anchor="center")
 
         name_row = tk.Frame(left, bg=WHITE)
         name_row.pack(fill=tk.X, pady=(12, 0))
         tk.Label(name_row, text=f"{car['make']} {car['model']}", font=("Arial", 16, "bold"), bg=WHITE, fg=TEXT).pack(side=tk.LEFT)
-        tk.Label(name_row, text=f"${car['rate']:.0f}/day", font=("Arial", 16, "bold"), bg=WHITE, fg=TEXT).pack(side=tk.RIGHT)
-        tk.Label(left, text=f"{car['type']}  |  {car['year']}", font=("Arial", 10), bg=WHITE, fg=MUTED).pack(anchor="w")
+        tk.Label(name_row, text=f"${car['rate']:.2f}/day", font=("Arial", 16, "bold"), bg=WHITE, fg=TEXT).pack(side=tk.RIGHT)
+        tk.Label(left, text=f"{car['year']}  |  {car['type']}  |  {car['city']}", font=("Arial", 10), bg=WHITE,
+                 fg=MUTED).pack(anchor="w")
 
+        # Vehicle details (make, model and price are listed separately so it's easier to compare cars)
         tk.Frame(left, bg=BORDER, height=1).pack(fill=tk.X, pady=12)
-        tk.Label(left, text="Vehicle features", font=("Arial", 11, "bold"), bg=WHITE, fg=TEXT).pack(anchor="w")
+        tk.Label(left, text="Vehicle details", font=("Arial", 11, "bold"), bg=WHITE, fg=TEXT).pack(anchor="w")
         features = tk.Frame(left, bg=WHITE)
         features.pack(fill=tk.X, pady=(5, 0))
-        for col, (title, value) in enumerate([("Vehicle type", car["type"]), ("Year", car["year"]),
-                                              ("Pick-up branch", car["location"] or "-")]):
+        details = [("Make", car["make"]), ("Model", car["model"]), ("Year", car["year"]),
+                   ("Vehicle type", car["type"]), ("Price per day", f"${car['rate']:.2f}"),
+                   ("Price for 7 days", f"${car['rate'] * 7:.2f}")]
+        for i, (title, value) in enumerate(details):
+            row = (i // 3) * 2
+            col = i % 3
             features.columnconfigure(col, weight=1)
-            tk.Label(features, text=title, font=("Arial", 9), bg=WHITE, fg=MUTED).grid(row=0, column=col, sticky="w")
-            tk.Label(features, text=value, font=("Arial", 11), bg=WHITE, fg=TEXT).grid(row=1, column=col, sticky="w")
+            tk.Label(features, text=title, font=("Arial", 9), bg=WHITE, fg=MUTED).grid(row=row, column=col, sticky="w")
+            tk.Label(features, text=value, font=("Arial", 11), bg=WHITE, fg=TEXT).grid(row=row + 1, column=col,
+                                                                                       sticky="w", pady=(0, 8))
 
-        tk.Label(left, text="About this vehicle", font=("Arial", 11, "bold"), bg=WHITE, fg=TEXT).pack(anchor="w", pady=(14, 2))
-        about = f"The {car['year']} {car['make']} {car['model']} is a {car['type'].lower()} available to rent"
-        if car["location"]:
-            about += f" from our {car['location']}"
-        tk.Label(left, text=about + f" for ${car['rate']:.2f} per day.", font=("Arial", 11), bg=WHITE, fg=TEXT,
-                 wraplength=520, justify="left").pack(anchor="w")
+        tk.Label(left, text="Pick-up branch", font=("Arial", 11, "bold"), bg=WHITE, fg=TEXT).pack(anchor="w", pady=(6, 2))
+        branch = f"{car['location']}\n{car['address']}" if car["location"] else "-"
+        tk.Label(left, text=branch, font=("Arial", 11), bg=WHITE, fg=TEXT, justify="left").pack(anchor="w")
 
-        # Right side - "Book this car" box
+        # Right side - "Book this car" box (RENT-01.2 booking form)
         right = tk.Frame(columns, bg=WHITE, padx=18, pady=15, highlightthickness=1, highlightbackground=BORDER)
         right.grid(row=0, column=1, sticky="new")
         tk.Label(right, text="Book this car", font=("Arial", 14, "bold"), bg=WHITE, fg=TEXT).pack(anchor="w")
@@ -434,17 +451,21 @@ class BrowseWindow:
             self.details_return.insert(0, self.dates[1].strftime("%m/%d/%Y"))
 
         tk.Label(right, text="Pick-up location", font=("Arial", 11), bg=WHITE, fg=TEXT).pack(anchor="w")
-        location_box = ttk.Combobox(right, state="readonly")
-        location_box.pack(fill=tk.X, pady=(2, 4))
+        self.location_box = ttk.Combobox(right, state="readonly")
+        self.location_box.pack(fill=tk.X, pady=(2, 4))
+        self.location_ids = {}  # location name -> location_id
         session = self.app.Session()
         try:
-            location_box["values"] = [loc.location_name for loc in get_locations(session)]
+            for loc in get_locations(session):
+                self.location_ids[loc.location_name] = loc.location_id
         finally:
             session.close()
+        self.location_box["values"] = list(self.location_ids)
         if car["location"]:
-            location_box.set(car["location"])
+            self.location_box.set(car["location"])
 
-        self.details_error = tk.Label(right, text="", font=("Arial", 9), bg=WHITE, fg=RED, justify="left")
+        self.details_error = tk.Label(right, text="", font=("Arial", 9), bg=WHITE, fg=RED, justify="left",
+                                      wraplength=330)
         self.details_error.pack(anchor="w")
         tk.Frame(right, bg=BORDER, height=1).pack(fill=tk.X, pady=8)
 
@@ -461,6 +482,10 @@ class BrowseWindow:
         self.price_title.grid(row=1, column=0, sticky="w")
         self.price_value = tk.Label(summary, text="-", font=("Arial", 9), bg=WHITE, fg=TEXT)
         self.price_value.grid(row=1, column=1, sticky="e")
+        tk.Label(summary, text=f"Deposit option ({payment_rules.DEPOSIT_PERCENT}%)", font=("Arial", 9), bg=WHITE,
+                 fg=MUTED).grid(row=2, column=0, sticky="w")
+        self.deposit_value = tk.Label(summary, text="-", font=("Arial", 9), bg=WHITE, fg=TEXT)
+        self.deposit_value.grid(row=2, column=1, sticky="e")
         tk.Frame(right, bg=BORDER, height=1).pack(fill=tk.X, pady=6)
         total_row = tk.Frame(right, bg=WHITE)
         total_row.pack(fill=tk.X)
@@ -468,10 +493,8 @@ class BrowseWindow:
         self.total_value = tk.Label(total_row, text="-", font=("Arial", 11, "bold"), bg=WHITE, fg=TEXT)
         self.total_value.pack(side=tk.RIGHT)
 
-        # Book Now does nothing yet, booking is Sprint 2 (RENT-01)
         tk.Button(right, text="Book Now", font=("Arial", 11, "bold"), bg=DARK, fg="white",
-                  command=lambda: messagebox.showinfo("Coming in Sprint 2", "Booking will be available in Sprint 2.",
-                                                      parent=self.window)).pack(fill=tk.X, ipady=3, pady=(12, 6))
+                  command=self.book_now).pack(fill=tk.X, ipady=3, pady=(12, 6))
         tk.Button(right, text="Back to Search", font=("Arial", 11), bg=WHITE, fg=TEXT,
                   command=self.back_to_search).pack(fill=tk.X, ipady=3)
 
@@ -483,7 +506,7 @@ class BrowseWindow:
         rate = self.details_car["rate"]
         pickup_text = self.details_pickup.get().strip()
         return_text = self.details_return.get().strip()
-        for label in (self.duration_value, self.price_value, self.total_value):
+        for label in (self.duration_value, self.price_value, self.total_value, self.deposit_value):
             label.config(text="-")
         self.price_title.config(text="Rental price")
         self.details_error.config(text="")
@@ -494,16 +517,59 @@ class BrowseWindow:
         if errors:
             self.details_error.config(text="\n".join(errors))
             return
-        days = (return_date - pickup).days
+        days = booking_rules.rental_days(pickup, return_date)
+        total = booking_rules.calculate_total(rate, pickup, return_date)
         self.duration_value.config(text=f"{days} days" if days != 1 else "1 day")
-        self.price_title.config(text=f"Rental price (${rate:.0f} x {days} days)")
-        self.price_value.config(text=f"${rate * days:.2f}")
-        self.total_value.config(text=f"${rate * days:.2f}")
+        self.price_title.config(text=f"Rental price (${rate:.2f} x {days} days)")
+        self.price_value.config(text=f"${total:.2f}")
+        self.deposit_value.config(text=f"${payment_rules.deposit_amount(total):.2f}")
+        self.total_value.config(text=f"${total:.2f}")
+
+    def book_now(self):
+        """Book Now (RENT-01.2) - checks the form, creates the booking, then shows the confirmation page"""
+        pickup_text = self.details_pickup.get().strip()
+        return_text = self.details_return.get().strip()
+        if not pickup_text or not return_text:
+            self.details_error.config(text="Please enter both a pick-up date and a return date.")
+            return
+        pickup = read_date(pickup_text)
+        return_date = read_date(return_text)
+        if pickup is None or return_date is None:
+            self.details_error.config(text="Enter dates as mm/dd/yyyy.")
+            return
+
+        # Same booking rules the backend uses (booking_rules.py)
+        ok, message = booking_rules.validate_booking_dates(pickup, return_date)
+        if not ok:
+            self.details_error.config(text=message)
+            return
+        location = self.location_box.get()
+        if location not in self.location_ids:
+            self.details_error.config(text="Please choose a pick-up location.")
+            return
+
+        session = self.app.Session()
+        try:
+            success, message, reservation_id = create_booking(session, self.user["user_id"], self.details_car["id"],
+                                                              pickup, return_date, self.location_ids[location])
+        except Exception as e:
+            messagebox.showerror("Database Error", f"Could not create the booking:\n{e}", parent=self.window)
+            return
+        finally:
+            session.close()
+
+        if not success:
+            # For example, someone else booked the car for those dates first
+            self.details_error.config(text=message)
+            return
+        booking_ui.show_confirmation(self, reservation_id)
 
     def back_to_search(self):
-        # Goes back to the browse page with the same filters and results as before
-        if self.details_frame is not None:
-            self.details_frame.destroy()
-            self.details_frame = None
+        # Goes back to the browse page with the same filters as before.
+        # The search runs again so a car that was just booked drops out of the results.
+        if self.page is not None:
+            self.page.destroy()
+            self.page = None
             self.browse_frame.pack(fill=tk.BOTH, expand=True)
             self.window.title("DriveNow - Browse Cars")
+            self.search()
