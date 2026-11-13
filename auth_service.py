@@ -91,6 +91,8 @@ def update_rental_status_secure(db_session, reservation_id, new_status):
     """
     ADMIN-02.3: Enforces a backend check using app_session 
     to ensure ONLY administrators can save reservation status changes.
+    To Be called by admin_ui.py.
+    create a new "tab" in admin_ui for booking mangagement utilize handle_rental_status_update().
     """
     # 1. Check the active session to verify the logged-in user's role
     if not app_session.is_logged_in or app_session.user.role != 'Administrator':
