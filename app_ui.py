@@ -251,8 +251,9 @@ def check_signup_fields(first_name, last_name, email, phone, password, confirm):
     for name in ("first_name", "last_name"):
         if name not in problems and not re.match(r"^[A-Za-z][A-Za-z '\-]*$", values[name]):
             problems[name] = "Use letters only."
-    if "email" not in problems and not re.match(r"^[^@\s]+@[^@\s]+\.[^@\s]+$", email):
-        problems["email"] = "Enter a valid email address."
+    # Email has to look like name@domain.ca or name@domain.com (letters, numbers, dots, dashes or underscores)
+    if "email" not in problems and not re.match(r"^[A-Za-z0-9._-]+@[A-Za-z0-9-]+(\.[A-Za-z0-9-]+)*\.(ca|com)$", email):
+        problems["email"] = "Enter a valid email address ending in .ca or .com."
     if "phone" not in problems and len(phone_digits(phone)) != 10:
         problems["phone"] = "Enter a valid 10-digit phone number."
     if "password" not in problems and len(password) < 8:
