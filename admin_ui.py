@@ -272,8 +272,8 @@ class AdminWindow:
     def handle_rental_status_update(self, reservation_id, new_status):
         """
         ADMIN-02.3
-        Called when an admin updates a booking status in the management panel.
-
+        Called when an admin updates a booking status in the management panel
+        to be coded.
         """
         # Open a database session
         session = self.app.Session()
