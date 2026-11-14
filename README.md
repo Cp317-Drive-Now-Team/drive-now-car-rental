@@ -51,8 +51,16 @@ To allow the application to connect to your local MySQL instance, configure your
 
 ### 3. Running the Application UI
 1. Ensure you have **Python 3.x** installed on your system.
+    1a. You must install Dependencies (Section 4)
 2. Clone or download the project repository to your local machine.
 3. Open your terminal or command prompt inside the project folder.
 4. Launch the application script:
    ```bash
    python app_ui.py
+   ```
+### 4. Dependencies
+To install the required Python packages for the backend database and security modules (`SQLAlchemy`, `PyMySQL`, and `Werkzeug`), run the following command:
+
+```bash
+pip install sqlalchemy pymysql werkzeug
+```
