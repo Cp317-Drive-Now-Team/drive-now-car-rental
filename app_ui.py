@@ -75,6 +75,32 @@ class DriveNowApp:
         self.email_entry.bind("<Return>", lambda event: self.handle_login())
         self.password_entry.bind("<Return>", lambda event: self.handle_login())
         self.email_entry.focus_set()
+        self.root.title("DriveNow Car Rental - Login")
+        self.root.geometry("500x230")
+        self.root.resizable(False, False)
+
+        main_frame = tk.Frame(root, padx=20, pady=20)
+        main_frame.pack(fill=tk.BOTH, expand=True)
+
+        tk.Label(main_frame, text="Welcome to DriveNow", font=("Arial", 14, "bold")).grid(
+            row=0, column=0, columnspan=2, pady=(0, 15))
+
+        tk.Label(main_frame, text="Email / Username:", font=("Arial", 10)).grid(row=1, column=0, sticky="w", pady=5)
+        self.email_entry = tk.Entry(main_frame, width=30)
+        self.email_entry.grid(row=1, column=1, pady=5)
+
+        tk.Label(main_frame, text="Password:", font=("Arial", 10)).grid(row=2, column=0, sticky="w", pady=5)
+        self.password_entry = tk.Entry(main_frame, width=30, show="*")
+        self.password_entry.grid(row=2, column=1, pady=5)
+
+        button_frame = tk.Frame(main_frame)
+        button_frame.grid(row=3, column=0, columnspan=2, pady=(15, 0))
+
+        tk.Button(button_frame, text="Login", width=10, bg="#007ACC", fg="white",
+                  command=self.handle_login).pack(side=tk.LEFT, padx=5)
+        tk.Button(button_frame, text="Sign Up (Renter)", width=15, bg="#28A745", fg="white",
+                  command=self.handle_signup).pack(side=tk.LEFT, padx=5)
+
 
     # ---------------- LOGIN (ACC-02.3) ----------------
     def handle_login(self):
@@ -217,7 +243,7 @@ class DriveNowApp:
                 elif msg == "Driver's license is already registered.":
                     errors["licence"].config(text="This licence number is already registered.")
                 else:
-                    messagebox.showerror("Registration Failed", msg, parent=signup_window)
+                    messagebox.showerror("Registration Failed", f"Could not register user:\n{msg}", parent=signup_window)
             except Exception as e:
                 messagebox.showerror("Error", f"An error occurred: {e}", parent=signup_window)
             finally:
@@ -265,7 +291,6 @@ def check_signup_fields(first_name, last_name, email, phone, password, confirm):
 
 def email_taken(session, email):
     return session.query(User).filter(func.lower(User.email) == email.lower()).first() is not None
-
 
 
 if __name__ == "__main__":
