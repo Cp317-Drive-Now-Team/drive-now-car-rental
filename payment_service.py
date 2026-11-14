@@ -1,129 +1,125 @@
-"""PAY-01.3 (pay), PAY-02.3 (deposit and balance) and refunds for cancellations.
-
-No schema changes: deposit and balance are worked out from the payments table.
-  Payment.payment_type: 'Deposit' | 'Full Payment' (also used for the final balance) | 'Refund'
-  Payment.transaction_token: reference number only. Card details are never stored.
-"""
-import uuid
-from decimal import Decimal, ROUND_HALF_UP
-
-from sqlalchemy import select
 from sqlalchemy.orm import Session
-
-import payment_gateway
-from booking_service import BookingError
-from models import Payment, Reservation
-
-DEPOSIT_PERCENT = Decimal("20")   # TODO: Dheeraj to confirm (PAY-02.1)
-REFUND_POLICY = "full"            # TODO: Dheeraj to confirm: 'full' | 'deposit_forfeit' | 'none'
-
-TWO_PLACES = Decimal("0.01")
+from models import Reservation, Payment
+import payment_rules
+from booking_service import payments_for
 
 
-def _money(x) -> Decimal:
-    return Decimal(x).quantize(TWO_PLACES, rounding=ROUND_HALF_UP)
+def get_payment_options(session: Session, user_id: int, reservation_id: int):
+    """
+    Returns what the payment page needs for one booking: total, amount already paid, balance,
+    and the deposit amount (PAY-02). Returns None if the booking isn't the customer's.
+    """
+    booking = session.query(Reservation).filter(
+        Reservation.reservation_id == reservation_id,
+        Reservation.user_id == user_id
+    ).first()
+    if booking is None:
+        return None
+
+    paid = payment_rules.amount_paid(payments_for(booking))
+    return {
+        "id": booking.reservation_id,
+        "car": f"{booking.car.year} {booking.car.make} {booking.car.model}",
+        "start": booking.start_date,
+        "end": booking.end_date,
+        "location": booking.pickup_location.location_name if booking.pickup_location else "",
+        "total": float(booking.total_cost),
+        "paid": paid,
+        "balance": payment_rules.balance_due(booking.total_cost, payments_for(booking)),
+        "deposit": payment_rules.deposit_amount(booking.total_cost),
+        "deposit_allowed": paid == 0,  # a deposit is only for the first payment
+        "status": booking.status,
+    }
 
 
-def paid_so_far(r: Reservation) -> Decimal:
-    return _money(sum((p.amount for p in r.payments
-                       if p.payment_status == "Successful" and p.payment_type != "Refund"),
-                      Decimal("0")))
+def make_payment(session: Session, user_id: int, reservation_id: int, payment_type: str,
+                 card_number: str, expiry: str, cvv: str):
+    """
+    Pays for a booking through the test-mode payment service. Fulfills PAY-01 (full payment) and PAY-02 (deposit).
+    payment_type is 'Full Payment' or 'Deposit'.
+    Returns (success, message, payment_id). The card number is never saved, only the transaction token.
+    """
+    # 1. Check the card details look right (format only)
+    ok, message = payment_rules.validate_card(card_number, expiry, cvv)
+    if not ok:
+        return False, message, None
 
+    # 2. Find the booking and work out how much to charge
+    info = get_payment_options(session, user_id, reservation_id)
+    if info is None:
+        return False, "Booking not found.", None
+    if info["status"] in ('Cancelled', 'Completed'):
+        return False, "This booking can no longer be paid.", None
+    if info["balance"] <= 0:
+        return False, "This booking is already paid in full.", None
 
-def deposit_amount(r: Reservation) -> Decimal:
-    return _money(r.total_cost * DEPOSIT_PERCENT / 100)
-
-
-def payment_summary(session: Session, user_id: int, reservation_id: int) -> dict:
-    """What Sadaf's payment page shows: total, deposit option, balance."""
-    r = session.get(Reservation, reservation_id)
-    if r is None or r.user_id != user_id:
-        raise BookingError("Booking not found.")
-    paid = paid_so_far(r)
-    return {"reservation_id": r.reservation_id, "status": r.status,
-            "total": _money(r.total_cost), "paid": paid,
-            "balance": _money(r.total_cost) - paid,
-            "deposit_percent": DEPOSIT_PERCENT, "deposit_amount": deposit_amount(r),
-            "deposit_available": paid == 0}
-
-
-def pay(session: Session, user_id: int, reservation_id: int, mode: str, payment_token: str,
-        payment_method: str = "Card") -> dict:
-    """mode = 'full' or 'deposit'. If a deposit was already paid, this pays the remaining balance.
-    Returns {'success', 'message', 'payment_id', 'receipt', 'balance'}."""
-    from receipt_service import build_receipt  # local import avoids a circular import
-
-    if mode not in ("full", "deposit"):
-        raise BookingError("Choose full payment or deposit.")
-    try:
-        r = session.execute(  # lock: two clicks / two windows cannot pay the same booking twice
-            select(Reservation).where(Reservation.reservation_id == reservation_id).with_for_update()
-        ).scalar_one_or_none()
-        if r is None or r.user_id != user_id:
-            raise BookingError("Booking not found.")
-        if r.status not in ("Pending", "Confirmed"):
-            raise BookingError(f"A {r.status.lower()} booking cannot be paid.")
-
-        total, paid = _money(r.total_cost), paid_so_far(r)
-        if paid >= total:
-            raise BookingError("This booking is already fully paid.")
-        if paid > 0:
-            amount, ptype = total - paid, "Full Payment"          # balance after a deposit
-        elif mode == "deposit":
-            amount, ptype = deposit_amount(r), "Deposit"
-        else:
-            amount, ptype = total, "Full Payment"
-
-        result = payment_gateway.charge(
-            amount, payment_token, idempotency_key=f"res{reservation_id}-{ptype}-{paid}-{uuid.uuid4().hex[:6]}")
-
-        payment = Payment(reservation_id=reservation_id, amount=amount, payment_type=ptype,
-                          payment_method=payment_method, transaction_token=result.reference,
-                          payment_status="Successful" if result.ok else "Failed")
-        session.add(payment)
-        if not result.ok:
-            session.commit()   # keep a record of the failed attempt
-            return {"success": False, "message": result.message or "Payment failed.",
-                    "payment_id": payment.payment_id, "receipt": None, "balance": total - paid}
-
-        r.status = "Confirmed"
-        session.flush()
-        session.refresh(r)
-        receipt = build_receipt(session, user_id, payment.payment_id)   # PAY-03.2 automatic receipt
-        session.commit()
-        return {"success": True, "message": "Payment successful.", "payment_id": payment.payment_id,
-                "receipt": receipt, "balance": total - paid_so_far(r)}
-    except Exception:
-        session.rollback()
-        raise
-
-
-def refund_for_cancellation(session: Session, r: Reservation) -> Decimal:
-    """Called by cancel_reservation inside its transaction. Adds Refund rows; does not commit."""
-    paid = paid_so_far(r)
-    if paid <= 0 or REFUND_POLICY == "none":
-        return Decimal("0.00")
-    if REFUND_POLICY == "deposit_forfeit":
-        deposit = next((p.amount for p in r.payments
-                        if p.payment_type == "Deposit" and p.payment_status == "Successful"), Decimal("0"))
-        to_refund = max(Decimal("0"), paid - _money(deposit))
+    if payment_type == 'Deposit':
+        if not info["deposit_allowed"]:
+            return False, "A deposit has already been paid. Please pay the remaining balance.", None
+        amount = info["deposit"]
     else:
-        to_refund = paid
+        amount = info["balance"]  # full payment, or the rest after a deposit
 
-    remaining, refunded = _money(to_refund), Decimal("0.00")
-    originals = sorted((p for p in r.payments
-                        if p.payment_status == "Successful" and p.payment_type != "Refund"),
-                       key=lambda p: p.payment_id, reverse=True)
-    for p in originals:
-        if remaining <= 0:
-            break
-        part = min(remaining, _money(p.amount))
-        res = payment_gateway.refund(p.transaction_token, part)
-        if not res.ok:
-            raise BookingError("The refund could not be processed. The booking was not cancelled.")
-        session.add(Payment(reservation_id=r.reservation_id, amount=part, payment_type="Refund",
-                            payment_method=p.payment_method, transaction_token=res.reference,
-                            payment_status="Refunded"))
-        remaining -= part
-        refunded += part
-    return refunded
+    # 3. Send it to the test-mode payment service
+    status, token = payment_rules.process_test_payment(card_number)
+
+    # 4. Save the result (successful or failed) with the token only
+    try:
+        payment = Payment(
+            reservation_id=reservation_id,
+            amount=amount,
+            payment_type=payment_type,
+            payment_method=payment_rules.TEST_METHOD,
+            transaction_token=token,
+            payment_status=status
+        )
+        session.add(payment)
+
+        # 5. A booking is Confirmed once any payment goes through (deposit or full)
+        if status == 'Successful':
+            booking = session.get(Reservation, reservation_id)
+            booking.status = 'Confirmed'
+        session.commit()
+        print(f"Payment #{payment.payment_id} for booking #{reservation_id}: {status}")
+    except Exception as e:
+        session.rollback()
+        print(f"Payment error: {e}")
+        return False, "Could not save the payment. Please try again.", None
+
+    if status != 'Successful':
+        return False, "Payment declined. Your card was not charged. Please try a different card.", None
+    return True, "Payment successful.", payment.payment_id
+
+
+def get_receipt(session: Session, user_id: int, payment_id: int = None, reservation_id: int = None):
+    """
+    Builds the receipt for a payment. Fulfills PAY-03 (View Receipts).
+    If only reservation_id is given, uses the latest successful payment on that booking.
+    Returns a dictionary, or None if there is nothing to show.
+    """
+    query = session.query(Payment).join(Reservation).filter(Reservation.user_id == user_id)
+    if payment_id is not None:
+        payment = query.filter(Payment.payment_id == payment_id).first()
+    else:
+        payment = query.filter(Payment.reservation_id == reservation_id,
+                               Payment.payment_status == 'Successful').order_by(Payment.payment_id.desc()).first()
+    if payment is None:
+        return None
+
+    booking = payment.reservation
+    return {
+        "receipt_no": payment.payment_id,
+        "date": payment.payment_date,
+        "booking_id": booking.reservation_id,
+        "car": f"{booking.car.year} {booking.car.make} {booking.car.model}",
+        "start": booking.start_date,
+        "end": booking.end_date,
+        "location": booking.pickup_location.location_name if booking.pickup_location else "",
+        "payment_type": payment.payment_type,
+        "method": payment.payment_method,
+        "reference": payment.transaction_token,
+        "amount": float(payment.amount),
+        "total": float(booking.total_cost),
+        "paid_so_far": payment_rules.amount_paid(payments_for(booking)),
+        "balance": payment_rules.balance_due(booking.total_cost, payments_for(booking)),
+    }

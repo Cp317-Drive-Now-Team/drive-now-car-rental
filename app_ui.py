@@ -4,7 +4,8 @@ from tkinter import messagebox
 from sqlalchemy import create_engine, func
 from sqlalchemy.orm import sessionmaker
 from models import User
-from security import register_user, authenticate_user
+import auth_service
+from account_service import register_customer
 from browse_ui import BrowseWindow
 from admin_ui import AdminWindow
 
@@ -114,34 +115,36 @@ class DriveNowApp:
 
         session = SessionLocal()
         try:
-            # Authenticate against MySQL database using security.py
-            user = authenticate_user(session, email, password)
-
-            if not user:
-                # Same message for a wrong email or a wrong password, so nobody can guess which emails have accounts
-                self.login_error.config(text="Invalid email or password.")
-                self.password_entry.delete(0, tk.END)
-                return
-
-            user_info = {"user_id": user.user_id, "first_name": user.first_name, "role": user.role}
+            # Albina's auth_service checks the password and starts the session (ACC-02.3)
+            success, message, home_page = auth_service.login(session, email, password)
         except Exception as e:
             messagebox.showerror("Database Error", f"Could not connect to database:\n{e}")
             return
         finally:
             session.close()
 
+        if not success:
+            # Same message for a wrong email or a wrong password, so nobody can guess which emails have accounts
+            self.login_error.config(text=message)
+            self.password_entry.delete(0, tk.END)
+            return
+
+        current = auth_service.app_session.user
+        user_info = {"user_id": current.user_id, "first_name": current.first_name, "role": current.role}
+
         # Hide the sign in window and open the right screen for the role
         self.password_entry.delete(0, tk.END)
         self.root.withdraw()
-        if user_info["role"] == 'Administrator':
+        if home_page == "admin_dashboard" and auth_service.can_access("admin_dashboard"):
             self.current_window = AdminWindow(self, user_info)
-        else:
+        elif auth_service.can_access("browse_cars"):
             self.current_window = BrowseWindow(self, user_info)
 
     def logout(self, window):
         """Logout (ACC-02) - closes the current screen and goes back to sign in"""
         if not messagebox.askyesno("Logout", "Are you sure you want to log out?", parent=window):
             return
+        auth_service.logout()  # ends the session in auth_service
         window.destroy()
         self.current_window = None
         self.email_entry.delete(0, tk.END)
@@ -219,15 +222,15 @@ class DriveNowApp:
                         errors[name].config(text=message)
                     return
 
-                # Register user using security.py (hashes password and commits to MySQL)
+                # Albina's account_service checks the data again, hashes the password and saves
+                # the account as a Customer (ACC-01.3)
                 digits = phone_digits(phone)
-                success, msg = register_user(
-                    session=session,
-                    first_name=first_name,
-                    last_name=last_name,
-                    email=email,
-                    plain_password=password,
-                    role='Customer',  # sign up only makes customers, admins are added by the team
+                success, msg = register_customer(
+                    session,
+                    first_name,
+                    last_name,
+                    email,
+                    password,
                     driver_license=licence if licence else None,
                     phone=f"{digits[0:3]}-{digits[3:6]}-{digits[6:]}"
                 )
@@ -235,6 +238,10 @@ class DriveNowApp:
                 if success:
                     messagebox.showinfo("Success", "Account created successfully! You can now sign in.", parent=signup_window)
                     signup_window.destroy()
+                elif msg == "Email already exists.":
+                    errors["email"].config(text="An account with this email already exists.")
+                elif msg == "Driver's license is already registered.":
+                    errors["licence"].config(text="This licence number is already registered.")
                 else:
                     messagebox.showerror("Registration Failed", f"Could not register user:\n{msg}", parent=signup_window)
             except Exception as e:
@@ -270,8 +277,9 @@ def check_signup_fields(first_name, last_name, email, phone, password, confirm):
     for name in ("first_name", "last_name"):
         if name not in problems and not re.match(r"^[A-Za-z][A-Za-z '\-]*$", values[name]):
             problems[name] = "Use letters only."
-    if "email" not in problems and not re.match(r"^[^@\s]+@[^@\s]+\.[^@\s]+$", email):
-        problems["email"] = "Enter a valid email address."
+    # Email has to look like name@domain.ca or name@domain.com (letters, numbers, dots, dashes or underscores)
+    if "email" not in problems and not re.match(r"^[A-Za-z0-9._-]+@[A-Za-z0-9-]+(\.[A-Za-z0-9-]+)*\.(ca|com)$", email):
+        problems["email"] = "Enter a valid email address ending in .ca or .com."
     if "phone" not in problems and len(phone_digits(phone)) != 10:
         problems["phone"] = "Enter a valid 10-digit phone number."
     if "password" not in problems and len(password) < 8:

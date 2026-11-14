@@ -5,7 +5,7 @@ from decimal import Decimal
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from booking_service import BookingError
+from rental_booking_service import BookingError
 from models import Payment, Reservation
 
 

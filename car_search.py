@@ -15,9 +15,9 @@ SORT_OPTIONS = {
 
 def get_filter_options(session: Session):
     """
-    Returns the car types and makes of available cars, used to fill the dropdowns.
+    Returns the car types and makes of active cars, used to fill the dropdowns.
     """
-    available_cars = session.query(Car).filter(Car.status == 'Available').all()
+    available_cars = session.query(Car).filter(Car.is_active.is_(True), Car.status != 'Maintenance').all()
     types = sorted({car.car_type for car in available_cars})
     makes = sorted({car.make for car in available_cars})
     return types, makes
@@ -36,8 +36,8 @@ def search_cars(session: Session, pickup_date=None, return_date=None, car_type=N
     Returns available cars that match the search filters. Fulfills CAR-01 (Browse) and CAR-02 (Search).
     Every filter is optional. If both dates are given, cars booked on overlapping dates are left out.
     """
-    # 1. Only show cars that are available (removed cars are hidden from customers)
-    query = session.query(Car).filter(Car.status == 'Available')
+    # 1. Only show active cars, same rule as car_listing.py (removed cars and cars in maintenance are hidden)
+    query = session.query(Car).filter(Car.is_active.is_(True), Car.status != 'Maintenance')
 
     # 2. Apply the filters that were filled in
     if car_type:

@@ -3,10 +3,6 @@ from models import Car, Location, User
 
 CAR_STATUSES = ('Available', 'Rented', 'Maintenance')
 
-# There is no 'Removed' status in the cars table yet, so removing a car sets it to Maintenance.
-# Customers only see Available cars, so it gets hidden but the record is still kept.
-REMOVED_STATUS = 'Maintenance'
-
 
 def require_admin(session: Session, user_id: int):
     """
@@ -62,13 +58,14 @@ def update_car(session: Session, user_id: int, car_id: int, car_data: dict):
 def remove_car(session: Session, user_id: int, car_id: int):
     """
     Hides a car from customers instead of deleting it, so past bookings are not lost.
+    Uses the is_active column (False = removed from fleet).
     """
     require_admin(session, user_id)
     car = session.get(Car, car_id)
     if car is None:
         raise ValueError("That car no longer exists.")
 
-    car.status = REMOVED_STATUS
+    car.is_active = False
     session.commit()
-    print(f"Removed car #{car_id} (status set to {REMOVED_STATUS})")
+    print(f"Removed car #{car_id} (is_active set to False)")
     return car

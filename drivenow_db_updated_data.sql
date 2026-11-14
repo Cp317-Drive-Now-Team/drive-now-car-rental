@@ -33,6 +33,7 @@ CREATE TABLE `cars` (
   `daily_rate` decimal(10,2) NOT NULL,
   `status` enum('Available','Rented','Maintenance') NOT NULL DEFAULT 'Available',
   `location_id` int NOT NULL,
+  `is_active` tinyint(1) NOT NULL DEFAULT '1',
   PRIMARY KEY (`car_id`),
   KEY `location_id` (`location_id`),
   KEY `idx_car_search` (`make`,`model`,`year`,`car_type`,`status`),
@@ -46,7 +47,7 @@ CREATE TABLE `cars` (
 
 LOCK TABLES `cars` WRITE;
 /*!40000 ALTER TABLE `cars` DISABLE KEYS */;
-INSERT INTO `cars` VALUES (1,'Toyota','Corolla',2022,'Economy',45.00,'Available',1),(2,'Honda','Civic',2023,'Sedan',50.00,'Available',1),(3,'Toyota','RAV4',2023,'SUV',70.00,'Available',1),(4,'Hyundai','Elantra',2022,'Sedan',55.00,'Available',1),(5,'Ford','Escape',2022,'SUV',75.00,'Available',1),(6,'Subaru','Outback',2023,'SUV',80.00,'Available',1),(7,'Subaru','Outback',2023,'SUV',80.00,'Available',1);
+INSERT INTO `cars` VALUES (1,'Toyota','Corolla',2022,'Economy',45.00,'Available',1,1),(2,'Honda','Civic',2023,'Sedan',50.00,'Available',1,1),(3,'Toyota','RAV4',2023,'SUV',70.00,'Available',1,1),(4,'Hyundai','Elantra',2022,'Sedan',55.00,'Available',1,1),(5,'Ford','Escape',2022,'SUV',75.00,'Available',1,1),(6,'Subaru','Outback',2023,'SUV',80.00,'Available',1,1),(7,'Subaru','Outback',2023,'SUV',80.00,'Available',1,1);
 /*!40000 ALTER TABLE `cars` ENABLE KEYS */;
 UNLOCK TABLES;
 
@@ -168,7 +169,7 @@ CREATE TABLE `users` (
   PRIMARY KEY (`user_id`),
   UNIQUE KEY `email` (`email`),
   UNIQUE KEY `driver_license_number` (`driver_license_number`)
-) ENGINE=InnoDB AUTO_INCREMENT=5 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+) ENGINE=InnoDB AUTO_INCREMENT=6 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 --
@@ -177,7 +178,7 @@ CREATE TABLE `users` (
 
 LOCK TABLES `users` WRITE;
 /*!40000 ALTER TABLE `users` DISABLE KEYS */;
-INSERT INTO `users` VALUES (1,'Admin','Staff','admin@drivenow.com','$2b$12$E...mockhash...',NULL,NULL,'Administrator','2026-10-23 16:53:29'),(2,'Alex','Morgan','alex.morgan@example.com','$2b$12$E...mockhash...',NULL,'DL-987654321','Customer','2026-10-23 16:53:29'),(3,'Admin','Manager','admin.staff@drivenow.com','$2b$12$MockAdminHashPlaceholderForTestingOnly12345','519-555-0100',NULL,'Administrator','2026-10-26 20:50:57'),(4,'Jane','Doe','jane.doe@example.com','$2b$12$MockCustomerHashPlaceholderForTestingOnly67890','519-555-0199','DL-123456789-ON','Customer','2026-10-26 20:50:57');
+INSERT INTO `users` VALUES (1,'Admin','Staff','admin@drivenow.com','scrypt:32768:8:1$enLVo9XpKuteMOl8$9bea0b1d80f3ef1c42ce6c8f841f7f82c4a0b7fe45a7453db10b10fb5fb89e907698d37bfbfd2b5e1963cc6a6e57ec3111301c38961d29c9a982fc1940146591',NULL,NULL,'Administrator','2026-10-23 16:53:29'),(2,'Alex','Morgan','alex.morgan@example.com','scrypt:32768:8:1$enLVo9XpKuteMOl8$9bea0b1d80f3ef1c42ce6c8f841f7f82c4a0b7fe45a7453db10b10fb5fb89e907698d37bfbfd2b5e1963cc6a6e57ec3111301c38961d29c9a982fc1940146591',NULL,'DL-987654321','Customer','2026-10-23 16:53:29'),(3,'Admin','Manager','admin.staff@drivenow.com','scrypt:32768:8:1$enLVo9XpKuteMOl8$9bea0b1d80f3ef1c42ce6c8f841f7f82c4a0b7fe45a7453db10b10fb5fb89e907698d37bfbfd2b5e1963cc6a6e57ec3111301c38961d29c9a982fc1940146591','519-555-0100',NULL,'Administrator','2026-10-26 20:50:57'),(4,'Jane','Doe','jane.doe@example.com','scrypt:32768:8:1$enLVo9XpKuteMOl8$9bea0b1d80f3ef1c42ce6c8f841f7f82c4a0b7fe45a7453db10b10fb5fb89e907698d37bfbfd2b5e1963cc6a6e57ec3111301c38961d29c9a982fc1940146591','519-555-0199','DL-123456789-ON','Customer','2026-10-26 20:50:57'),(5,'Aryan','Kainth','kain0140@mylaurier.ca','scrypt:32768:8:1$enLVo9XpKuteMOl8$9bea0b1d80f3ef1c42ce6c8f841f7f82c4a0b7fe45a7453db10b10fb5fb89e907698d37bfbfd2b5e1963cc6a6e57ec3111301c38961d29c9a982fc1940146591',NULL,'NL-213456789-DL','Customer','2026-10-29 22:39:07');
 /*!40000 ALTER TABLE `users` ENABLE KEYS */;
 UNLOCK TABLES;
 /*!40103 SET TIME_ZONE=@OLD_TIME_ZONE */;
@@ -190,4 +191,4 @@ UNLOCK TABLES;
 /*!40101 SET COLLATION_CONNECTION=@OLD_COLLATION_CONNECTION */;
 /*!40111 SET SQL_NOTES=@OLD_SQL_NOTES */;
 
--- Dump completed on 2026-10-26 16:55:48
+-- Dump completed on 2026-11-09 17:19:35

@@ -7,8 +7,8 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 
 from models import Base, Car, Location, User
-from booking_service import BookingError, cancel_reservation, create_reservation
-from payment_service import pay, payment_summary
+from rental_booking_service import BookingError, cancel_reservation, create_reservation
+from rental_payment_service import pay, payment_summary
 from receipt_service import list_receipts
 
 engine = create_engine("sqlite:///:memory:")
