@@ -1,5 +1,3 @@
-CREATE DATABASE  IF NOT EXISTS `drivenow_db` /*!40100 DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci */ /*!80016 DEFAULT ENCRYPTION='N' */;
-USE `drivenow_db`;
 -- MySQL dump 10.13  Distrib 8.0.43, for Win64 (x86_64)
 --
 -- Host: 127.0.0.1    Database: drivenow_db
@@ -47,7 +45,7 @@ CREATE TABLE `cars` (
 
 LOCK TABLES `cars` WRITE;
 /*!40000 ALTER TABLE `cars` DISABLE KEYS */;
-INSERT INTO `cars` VALUES (1,'Toyota','Corolla',2022,'Economy',45.00,'Available',1,1),(2,'Honda','Civic',2023,'Sedan',50.00,'Available',1,1),(3,'Toyota','RAV4',2023,'SUV',70.00,'Available',1,1),(4,'Hyundai','Elantra',2022,'Sedan',55.00,'Available',1,1),(5,'Ford','Escape',2022,'SUV',75.00,'Available',1,1),(6,'Subaru','Outback',2023,'SUV',80.00,'Available',1,1),(7,'Subaru','Outback',2023,'SUV',80.00,'Available',1,1);
+INSERT INTO `cars` VALUES (1,'Toyota','Corolla',2022,'Economy',45.00,'Available',1,1),(2,'Honda','Civic',2023,'Sedan',50.00,'Rented',1,1),(3,'Toyota','RAV4',2023,'SUV',70.00,'Available',1,1),(4,'Hyundai','Elantra',2022,'Sedan',55.00,'Available',1,1),(5,'Ford','Escape',2022,'SUV',75.00,'Rented',1,1),(6,'Subaru','Outback',2023,'SUV',80.00,'Available',1,1),(7,'Subaru','Outback',2023,'SUV',80.00,'Rented',1,1);
 /*!40000 ALTER TABLE `cars` ENABLE KEYS */;
 UNLOCK TABLES;
 
@@ -98,7 +96,7 @@ CREATE TABLE `payments` (
   PRIMARY KEY (`payment_id`),
   KEY `reservation_id` (`reservation_id`),
   CONSTRAINT `payments_ibfk_1` FOREIGN KEY (`reservation_id`) REFERENCES `reservations` (`reservation_id`) ON DELETE CASCADE
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+) ENGINE=InnoDB AUTO_INCREMENT=13 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 --
@@ -107,6 +105,7 @@ CREATE TABLE `payments` (
 
 LOCK TABLES `payments` WRITE;
 /*!40000 ALTER TABLE `payments` DISABLE KEYS */;
+INSERT INTO `payments` VALUES (1,6,200.00,'Full Payment','Test Card','test_ok_c8b46305222567dc','Successful','2026-11-14 03:53:58'),(2,3,40.00,'Deposit','Test Card','test_ok_4c0b12781b3090a6','Successful','2026-11-14 03:54:57'),(3,3,160.00,'Full Payment','Test Card','test_decl_e60d753e8249d3a7','Failed','2026-11-14 03:56:16'),(4,3,40.00,'Refund','Test Card','test_refund_91451d8221a4fb92','Refunded','2026-11-14 03:57:01'),(5,7,30.00,'Deposit','Test Card','test_ok_647b6a136c83960c','Successful','2026-11-14 06:00:35'),(6,7,120.00,'Full Payment','Test Card','test_decl_4510d2a6aaff4e94','Failed','2026-11-14 06:01:08'),(7,7,120.00,'Full Payment','Test Card','test_ok_eaa22cc19633b36d','Successful','2026-11-14 06:01:25'),(8,6,200.00,'Refund','Test Card','test_refund_3b558310f2ba6b9c','Refunded','2026-11-14 06:02:23'),(9,8,64.00,'Deposit','Test Card','test_ok_21de8fe95d3848a8','Successful','2026-11-14 06:08:38'),(10,8,256.00,'Full Payment','Test Card','test_decl_5e42cf1093597b71','Failed','2026-11-14 06:09:14'),(11,8,256.00,'Full Payment','Test Card','test_ok_26e63e3a3a8514f9','Successful','2026-11-14 06:09:29'),(12,7,150.00,'Refund','Test Card','test_refund_7211b532432d6e7e','Refunded','2026-11-14 06:09:49');
 /*!40000 ALTER TABLE `payments` ENABLE KEYS */;
 UNLOCK TABLES;
 
@@ -137,7 +136,7 @@ CREATE TABLE `reservations` (
   CONSTRAINT `reservations_ibfk_2` FOREIGN KEY (`car_id`) REFERENCES `cars` (`car_id`) ON DELETE RESTRICT,
   CONSTRAINT `reservations_ibfk_3` FOREIGN KEY (`pickup_location_id`) REFERENCES `locations` (`location_id`) ON DELETE RESTRICT,
   CONSTRAINT `reservations_ibfk_4` FOREIGN KEY (`dropoff_location_id`) REFERENCES `locations` (`location_id`) ON DELETE RESTRICT
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+) ENGINE=InnoDB AUTO_INCREMENT=9 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 --
@@ -146,6 +145,7 @@ CREATE TABLE `reservations` (
 
 LOCK TABLES `reservations` WRITE;
 /*!40000 ALTER TABLE `reservations` DISABLE KEYS */;
+INSERT INTO `reservations` VALUES (1,2,1,1,1,'2026-11-15','2026-11-18',135.00,'Cancelled','2026-11-12 07:15:32'),(2,2,3,1,1,'2026-11-20','2026-11-25',350.00,'Cancelled','2026-11-12 07:15:32'),(3,2,2,1,1,'2026-12-01','2026-12-05',200.00,'Cancelled','2026-11-12 07:15:32'),(4,2,1,1,1,'2026-11-15','2026-11-18',135.00,'Cancelled','2026-11-12 07:15:37'),(5,2,3,1,1,'2026-11-20','2026-11-25',350.00,'Cancelled','2026-11-12 07:15:37'),(6,2,2,1,1,'2026-12-01','2026-12-05',200.00,'Cancelled','2026-11-12 07:15:37'),(7,2,5,1,1,'2026-12-13','2026-12-15',150.00,'Cancelled','2026-11-14 05:59:56'),(8,2,7,1,1,'2026-12-22','2026-12-26',320.00,'Confirmed','2026-11-14 06:08:08');
 /*!40000 ALTER TABLE `reservations` ENABLE KEYS */;
 UNLOCK TABLES;
 
@@ -191,4 +191,4 @@ UNLOCK TABLES;
 /*!40101 SET COLLATION_CONNECTION=@OLD_COLLATION_CONNECTION */;
 /*!40111 SET SQL_NOTES=@OLD_SQL_NOTES */;
 
--- Dump completed on 2026-11-09 17:19:35
+-- Dump completed on 2026-11-13 20:28:59
