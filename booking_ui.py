@@ -249,7 +249,7 @@ def show_my_bookings(browse):
 
     page = browse.new_page("My Bookings")
     tk.Label(page, text="My Bookings", font=("Arial", 20, "bold"), bg=WHITE, fg=TEXT).pack(anchor="w")
-    tk.Label(page, text="Select a booking to pay, view its receipt, or cancel it.", font=("Arial", 9),
+    tk.Label(page, text="Select a booking to pay, view its receipt, change its dates, or cancel it.", font=("Arial", 9),
              bg=WHITE, fg=MUTED).pack(anchor="w", pady=(0, 10))
 
     columns = [("id", "Booking", 70), ("car", "Car", 200), ("start", "Pick-up", 110), ("end", "Return", 110),
@@ -335,12 +335,22 @@ def show_my_bookings(browse):
         else:
             message.config(text=msg, fg=RED)
 
+    def modify_selected():
+        """Modify Booking button (RENT-03): opens the page where the customer picks new dates"""
+        booking_id = selected()
+        if booking_id is None:
+            return
+        from modify_booking_ui import show_modify  # imported here because modify_booking_ui imports this file
+        show_modify(browse, booking_id)
+
     buttons = tk.Frame(page, bg=WHITE)
     buttons.pack(anchor="w", pady=(6, 14))
     tk.Button(buttons, text="Pay / Pay Balance", font=("Arial", 11), bg=DARK, fg="white",
               command=pay_selected).pack(side=tk.LEFT, padx=(0, 8), ipady=2)
     tk.Button(buttons, text="View Receipt", font=("Arial", 11), bg=WHITE, fg=TEXT,
               command=receipt_selected).pack(side=tk.LEFT, padx=(0, 8), ipady=2)
+    tk.Button(buttons, text="Modify Booking", font=("Arial", 11), bg=WHITE, fg=TEXT,
+              command=modify_selected).pack(side=tk.LEFT, padx=(0, 8), ipady=2)
     tk.Button(buttons, text="Cancel Booking", font=("Arial", 11), bg=WHITE, fg=RED,
               command=cancel_selected).pack(side=tk.LEFT, ipady=2)
 
