@@ -1,13 +1,3 @@
-"""
-UI-01 Accessible Interface: keyboard support for the whole app.
-setup_keyboard() is called once in app_ui.py when the app starts, and it applies to every window.
-
-What it does:
-  - Tab / Shift+Tab moves between fields, buttons, checkboxes, dropdowns and tables
-  - Enter presses the button that is focused (tkinter only does this with Space by default)
-  - Every focused field and button gets a dark outline, so keyboard users can see where they are
-"""
-
 FOCUS_COLOUR = "#1A5FB4"  # dark blue outline, easy to see on white and grey
 
 
