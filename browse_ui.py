@@ -7,6 +7,9 @@ from booking_service import create_booking
 import booking_rules
 import payment_rules
 import booking_ui
+import account_ui
+from notification_service import send_booking_email
+from accessibility import make_clickable, FOCUS_COLOUR
 
 # Colours (greyscale to match the wireframes)
 WHITE = "#FFFFFF"
@@ -15,7 +18,7 @@ BANNER = "#D9D9D9"
 BORDER = "#D0D0D0"
 DARK = "#3F3F3F"
 TEXT = "#1F1F1F"
-MUTED = "#6B6B6B"
+MUTED = "#595959"  # darker grey so small text is easier to read (UI-01)
 RED = "#B00020"
 
 VEHICLE_TYPES = ["Economy", "Sedan", "SUV", "Van"]  # same types as Wireframe 1
@@ -145,20 +148,24 @@ class BrowseWindow:
         tk.Label(logo, text="Drive Now\nCar Rentals", font=("Arial", 11, "bold"), bg=WHITE, fg=TEXT,
                  justify="left").pack(side=tk.LEFT)
 
-        tk.Button(nav, text="Logout", font=("Arial", 11), bg=WHITE, fg=TEXT,
-                  command=lambda: self.app.logout(self.window)).pack(side=tk.RIGHT, padx=(15, 0))
-        # My Account is Sprint 3 (ACC-03), so it shows a message for now. My Bookings has a basic version (RENT-02).
-        for page in ["My Account", "My Bookings", "Browse Cars", "Home"]:
-            link = tk.Label(nav, text=page, font=("Arial", 12, "bold" if page == "Browse Cars" else "normal"),
-                            bg=WHITE, fg=TEXT, cursor="hand2")
-            link.pack(side=tk.RIGHT, padx=12)
-            if page in ("Home", "Browse Cars"):
-                link.bind("<Button-1>", lambda event: self.back_to_search())
-            elif page == "My Bookings":
-                link.bind("<Button-1>", lambda event: booking_ui.show_my_bookings(self))
-            else:
-                link.bind("<Button-1>", lambda event, p=page: messagebox.showinfo(
-                    p, "This page will be added in a later sprint.", parent=self.window))
+        # Navigation links. Each one can be clicked, or reached with Tab and opened with Enter (UI-01).
+        # They are made left to right so Tab moves through them in the same order you see them.
+        links = tk.Frame(nav, bg=WHITE)
+        pages = {
+            "Home": self.back_to_search,
+            "Browse Cars": self.back_to_search,
+            "My Bookings": lambda: booking_ui.show_my_bookings(self),
+            "My Account": lambda: account_ui.show_my_account(self),
+        }
+        for page, action in pages.items():
+            link = tk.Label(links, text=page, font=("Arial", 12, "bold" if page == "Browse Cars" else "normal"),
+                            bg=WHITE, fg=TEXT)
+            link.pack(side=tk.LEFT, padx=10)
+            make_clickable(link, action)
+        logout_btn = tk.Button(nav, text="Logout", font=("Arial", 11), bg=WHITE, fg=TEXT,
+                               command=lambda: self.app.logout(self.window))
+        logout_btn.pack(side=tk.RIGHT, padx=(15, 0))
+        links.pack(side=tk.RIGHT)
         tk.Frame(self.window, bg=BORDER, height=1).pack(fill=tk.X)
 
     def build_search_banner(self):
@@ -372,8 +379,10 @@ class BrowseWindow:
             card.destroy()
 
         for i, car in enumerate(results):
-            card = tk.Frame(self.cards_frame, bg=WHITE, padx=10, pady=12, highlightthickness=1,
-                            highlightbackground=BORDER, cursor="hand2")
+            # The card can be reached with Tab and opened with Enter or Space (UI-01).
+            # Its border turns dark blue when it has the keyboard focus.
+            card = tk.Frame(self.cards_frame, bg=WHITE, padx=10, pady=12, highlightthickness=2,
+                            highlightbackground=BORDER, highlightcolor=FOCUS_COLOUR, cursor="hand2", takefocus=1)
             card.grid(row=i // CARDS_PER_ROW, column=i % CARDS_PER_ROW, sticky="nsew", padx=6, pady=6)
             car_photo(card, car["id"], 170, 100).pack()
             tk.Label(card, text=f"{car['make']} {car['model']}", font=("Arial", 11, "bold"), bg=WHITE, fg=TEXT).pack(pady=(5, 0))
@@ -389,6 +398,8 @@ class BrowseWindow:
             # Clicking anywhere on the card opens its details page
             for widget in [card] + card.winfo_children():
                 widget.bind("<Button-1>", lambda event, c=car: self.open_details(c))
+            card.bind("<Return>", lambda event, c=car: self.open_details(c))
+            card.bind("<space>", lambda event, c=car: self.open_details(c))
 
         self.cards_canvas.yview_moveto(0)
         if message:
@@ -588,7 +599,16 @@ class BrowseWindow:
             # For example, someone else booked the car for those dates first
             self.details_error.config(text=message)
             return
-        booking_ui.show_confirmation(self, reservation_id)
+        # Send the booking email (NOTIF-01). The booking is already saved even if the email fails.
+        session = self.app.Session()
+        try:
+            sent, email_note = send_booking_email(session, reservation_id, "created")
+        except Exception as e:
+            print(f"Email error: {e}")
+            email_note = ""
+        finally:
+            session.close()
+        booking_ui.show_confirmation(self, reservation_id, email_note)
 
     def back_to_search(self):
         # Goes back to the browse page with the same filters as before.
