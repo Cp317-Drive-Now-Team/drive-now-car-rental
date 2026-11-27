@@ -4,6 +4,7 @@ from booking_service import get_my_bookings, cancel_booking, refund_preview
 from payment_service import get_payment_options, make_payment, get_receipt
 import payment_rules
 import cancellation_rules
+from notification_service import send_booking_email
 
 # Colours (greyscale to match the wireframes)
 WHITE = "#FFFFFF"
@@ -11,7 +12,7 @@ GREY = "#E6E6E6"
 BORDER = "#D0D0D0"
 DARK = "#3F3F3F"
 TEXT = "#1F1F1F"
-MUTED = "#6B6B6B"
+MUTED = "#595959"  # darker grey so small text is easier to read (UI-01)
 RED = "#B00020"
 GREEN = "#1E7B34"
 
@@ -42,7 +43,7 @@ def page_box(page, width=560):
     return box
 
 
-def show_confirmation(browse, reservation_id):
+def show_confirmation(browse, reservation_id, email_note=""):
     """Booking confirmation page (RENT-01.2). The booking is saved as Pending until it is paid."""
     session = browse.app.Session()
     try:
@@ -61,6 +62,10 @@ def show_confirmation(browse, reservation_id):
     box = page_box(page)
     tk.Label(box, text=f"Booking #{info['id']}", font=("Arial", 14, "bold"), bg=WHITE, fg=TEXT).pack(anchor="w")
     tk.Label(box, text="Status: Pending payment", font=("Arial", 10), bg=WHITE, fg=MUTED).pack(anchor="w", pady=(0, 10))
+    if email_note:
+        # e.g. "A confirmation email was sent to jane.doe@example.com." (NOTIF-01)
+        tk.Label(box, text=email_note, font=("Arial", 10), bg=WHITE, fg=GREEN, wraplength=500,
+                 justify="left").pack(anchor="w", pady=(0, 8))
     days = (info["end"] - info["start"]).days
     info_rows(box, [
         ("Car", info["car"]),
@@ -327,6 +332,13 @@ def show_my_bookings(browse):
         session = browse.app.Session()
         try:
             success, msg = cancel_booking(session, browse.user["user_id"], booking_id)
+            if success:
+                # Send the cancellation email (NOTIF-01)
+                try:
+                    sent, email_note = send_booking_email(session, booking_id, "cancelled", refund)
+                    msg += " " + email_note
+                except Exception as e:
+                    print(f"Email error: {e}")
         finally:
             session.close()
         if success:
