@@ -8,6 +8,8 @@ import auth_service
 from account_service import register_customer
 from browse_ui import BrowseWindow
 from admin_ui import AdminWindow
+from email_check import check_email
+from accessibility import setup_keyboard
 
 # Database connection comes from config.py (copy config.example.py to config.py and set your own password)
 from config import DATABASE_URL
@@ -19,7 +21,7 @@ SessionLocal = sessionmaker(bind=engine)
 WHITE = "#FFFFFF"
 DARK = "#3F3F3F"
 TEXT = "#1F1F1F"
-MUTED = "#6B6B6B"
+MUTED = "#595959"  # darker grey so small text is easier to read (UI-01)
 RED = "#B00020"
 
 
@@ -131,7 +133,7 @@ class DriveNowApp:
         """Create Account form (ACC-01). Name, email, phone and password are required."""
         signup_window = tk.Toplevel(self.root)
         signup_window.title("DriveNow - Create Account")
-        signup_window.geometry("520x540")
+        signup_window.geometry("520x570")
         signup_window.resizable(False, False)
         signup_window.configure(bg=WHITE)
         signup_window.grab_set()
@@ -162,7 +164,7 @@ class DriveNowApp:
             tk.Label(form, text=label, font=("Arial", 11), bg=WHITE, fg=TEXT).grid(row=row, column=col, sticky="w", padx=pad)
             entry = tk.Entry(form, font=("Arial", 11), relief="solid", bd=1, show="*" if hidden else "")
             entry.grid(row=row + 1, column=col, sticky="ew", ipady=3, padx=pad)
-            error = tk.Label(form, text="", font=("Arial", 9), bg=WHITE, fg=RED)
+            error = tk.Label(form, text="", font=("Arial", 9), bg=WHITE, fg=RED, wraplength=210, justify="left")
             error.grid(row=row + 2, column=col, sticky="w", padx=pad, pady=(0, 4))
             self.signup_entries[name] = entry
             self.signup_errors[name] = error
@@ -251,9 +253,11 @@ def check_signup_fields(first_name, last_name, email, phone, password, confirm):
     for name in ("first_name", "last_name"):
         if name not in problems and not re.match(r"^[A-Za-z][A-Za-z '\-]*$", values[name]):
             problems[name] = "Use letters only."
-    # Email has to look like name@domain.ca or name@domain.com (letters, numbers, dots, dashes or underscores)
-    if "email" not in problems and not re.match(r"^[A-Za-z0-9._-]+@[A-Za-z0-9-]+(\.[A-Za-z0-9-]+)*\.(ca|com)$", email):
-        problems["email"] = "Enter a valid email address ending in .ca or .com."
+    # Email is checked with the email-validator library (email_check.py)
+    if "email" not in problems:
+        ok, message, cleaned = check_email(email)
+        if not ok:
+            problems["email"] = message
     if "phone" not in problems and len(phone_digits(phone)) != 10:
         problems["phone"] = "Enter a valid 10-digit phone number."
     if "password" not in problems and len(password) < 8:
@@ -269,5 +273,6 @@ def email_taken(session, email):
 
 if __name__ == "__main__":
     root = tk.Tk()
+    setup_keyboard(root)  # keyboard support for every window (UI-01)
     app = DriveNowApp(root)
     root.mainloop()
