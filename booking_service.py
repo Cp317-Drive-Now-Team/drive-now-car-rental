@@ -5,6 +5,7 @@ from models import Car, Reservation, Payment
 import booking_rules
 import cancellation_rules
 import payment_rules
+import rental_status
 
 
 def create_booking(session: Session, user_id: int, car_id: int, start_date, end_date, pickup_location_id: int):
@@ -54,6 +55,20 @@ def create_booking(session: Session, user_id: int, car_id: int, start_date, end_
         return False, "Could not create the booking. Please try again.", None
 
 
+def is_picked_up(session: Session, booking: Reservation):
+    """
+    The database has no 'picked up' column, so we use the car's status: when an admin marks a rental as
+    picked up, the car is set to 'Rented'. Only the car's earliest open booking counts as the one picked up.
+    """
+    if booking.status not in ('Pending', 'Confirmed') or booking.car.status != 'Rented':
+        return False
+    first_open = session.query(Reservation).filter(
+        Reservation.car_id == booking.car_id,
+        Reservation.status.in_(('Pending', 'Confirmed'))
+    ).order_by(Reservation.start_date).first()
+    return first_open is not None and first_open.reservation_id == booking.reservation_id
+
+
 def payments_for(booking: Reservation):
     """Returns the booking's payments in the format payment_rules expects: (type, amount, status)."""
     return [(p.payment_type, p.amount, p.payment_status) for p in booking.payments]
@@ -83,6 +98,39 @@ def get_my_bookings(session: Session, user_id: int):
     return results
 
 
+def get_rental_history(session: Session, user_id: int):
+    """
+    Returns every booking the customer has made, newest first, with its rental status
+    (Upcoming, Active, Completed or Cancelled) and all of its payments. Used by My Account (ACC-03).
+    """
+    bookings = session.query(Reservation).filter(Reservation.user_id == user_id).order_by(
+        Reservation.start_date.desc()).all()
+    history = []
+    for b in bookings:
+        payments = []
+        for p in sorted(b.payments, key=lambda p: p.payment_id):
+            payments.append({
+                "receipt_no": p.payment_id,
+                "date": p.payment_date,
+                "type": p.payment_type,
+                "amount": float(p.amount),
+                "status": p.payment_status,
+            })
+        history.append({
+            "id": b.reservation_id,
+            "car": f"{b.car.year} {b.car.make} {b.car.model}",
+            "start": b.start_date,
+            "end": b.end_date,
+            "days": booking_rules.rental_days(b.start_date, b.end_date),
+            "location": b.pickup_location.location_name if b.pickup_location else "",
+            "total": float(b.total_cost),
+            "paid": payment_rules.amount_paid(payments_for(b)),
+            "status": rental_status.rental_status(b.status, b.start_date, b.end_date, is_picked_up(session, b)),
+            "payments": payments,
+        })
+    return history
+
+
 def cancel_booking(session: Session, user_id: int, reservation_id: int):
     """
     Cancels an upcoming booking and refunds what the cancellation rules allow. Fulfills RENT-02.
@@ -100,6 +148,10 @@ def cancel_booking(session: Session, user_id: int, reservation_id: int):
     ok, message = cancellation_rules.can_cancel(booking.status, booking.start_date)
     if not ok:
         return False, message
+
+    # A rental that the admin already marked as picked up can't be cancelled (the customer has the car)
+    if is_picked_up(session, booking):
+        return False, "This car has already been picked up, so the booking can't be cancelled."
 
     # 3. Work out the refund and record it (no card details are needed for a test refund)
     paid = payment_rules.amount_paid(payments_for(booking))
