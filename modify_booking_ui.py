@@ -4,6 +4,7 @@ import tkinter as tk
 from tkinter import messagebox
 from datetime import datetime
 from booking_modify_service import preview_change, modify_booking
+from notification_service import send_booking_email  # added by Sadaf (NOTIF-01)
 from booking_ui import (WHITE, BORDER, DARK, TEXT, MUTED, RED, GREEN, money, nice_date,
                         info_rows, page_box, show_my_bookings)
 
@@ -120,6 +121,13 @@ def show_modify(browse, reservation_id):
         session = browse.app.Session()
         try:
             success, msg = modify_booking(session, browse.user["user_id"], reservation_id, start, end)
+            if success:
+                # Send the "booking changed" email (NOTIF-01, added by Sadaf)
+                try:
+                    sent, email_note = send_booking_email(session, reservation_id, "changed")
+                    msg += " " + email_note
+                except Exception as e:
+                    print(f"Email error: {e}")
         finally:
             session.close()
         if success:
