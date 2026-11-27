@@ -14,8 +14,8 @@ from models import Base, Car, Location, User, Reservation
 from booking_service import create_booking, cancel_booking
 from booking_modify_service import modify_booking
 from payment_service import make_payment
-import notification_service as n
-import report_service as rep
+import booking_notifications as n
+import admin_report_service as rep
 
 d = lambda k: date.today() + timedelta(days=k)
 engine = create_engine("sqlite://"); Base.metadata.create_all(engine)

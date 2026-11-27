@@ -8,7 +8,7 @@ from models import Base, Car, Location, User, Reservation
 from booking_service import create_booking, cancel_booking
 from payment_service import make_payment
 from rental_history_service import get_rental_history, get_booking_summary
-import profile_service as p
+import account_profile_service as p
 
 d = lambda n: date.today() + timedelta(days=n)
 engine = create_engine("sqlite://")
