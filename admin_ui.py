@@ -1,11 +1,12 @@
 import tkinter as tk
 from tkinter import messagebox, ttk
-from datetime import date
+from datetime import date, datetime
 from decimal import Decimal, InvalidOperation
 from car_admin import add_car, update_car, remove_car, list_all_cars, list_locations, CAR_STATUSES
 from auth_service import update_rental_status_secure
 from rental_admin import list_rentals, mark_picked_up, mark_returned
 import rental_status
+from report_service import rental_report
 
 # Colours (greyscale to match the wireframes)
 WHITE = "#FFFFFF"
@@ -13,7 +14,7 @@ GREY = "#E6E6E6"
 BORDER = "#D0D0D0"
 DARK = "#3F3F3F"
 TEXT = "#1F1F1F"
-MUTED = "#6B6B6B"
+MUTED = "#595959"  # darker grey so small text is easier to read (UI-01)
 RED = "#B00020"
 
 
@@ -39,7 +40,7 @@ def check_car_fields(make, model, year, car_type, daily_rate, status, location):
 
 
 class AdminWindow:
-    """Admin page with two tabs: Manage Cars (ADMIN-01) and Manage Rentals (ADMIN-02)"""
+    """Admin page with three tabs: Manage Cars (ADMIN-01), Manage Rentals (ADMIN-02) and Reports (ADMIN-03)"""
 
     def __init__(self, app, user):
         self.app = app
@@ -63,9 +64,10 @@ class AdminWindow:
                   command=lambda: app.logout(self.window)).pack(side=tk.RIGHT)
         tk.Frame(self.window, bg=BORDER, height=1).pack(fill=tk.X)
 
-        # Tabs - Manage Cars and Manage Rentals
+        # Tabs - Manage Cars, Manage Rentals and Reports
         self.tabs = ttk.Notebook(self.window)
         self.tabs.pack(fill=tk.BOTH, expand=True, padx=20, pady=(12, 15))
+        self.tabs.enable_traversal()  # Ctrl+Tab switches tabs with the keyboard (UI-01)
 
         cars_tab = tk.Frame(self.tabs, bg=WHITE, padx=15, pady=12)
         self.tabs.add(cars_tab, text="  Manage Cars  ")
@@ -84,6 +86,14 @@ class AdminWindow:
         self.tabs.add(rentals_tab, text="  Manage Rentals  ")
         self.build_rentals_tab(rentals_tab)
         self.load_rentals()
+
+        reports_tab = tk.Frame(self.tabs, bg=WHITE, padx=15, pady=12)
+        self.tabs.add(reports_tab, text="  Reports  ")
+        self.build_reports_tab(reports_tab)
+        self.load_report()
+        # Refresh the report every time the tab is opened, so new bookings show up
+        self.tabs.bind("<<NotebookTabChanged>>",
+                       lambda event: self.load_report() if self.tabs.index("current") == 2 else None)
 
     def build_table(self, parent):
         # Table of every car, including ones customers can't see
@@ -390,3 +400,130 @@ class AdminWindow:
             messagebox.showerror("Error", f"An unexpected error occurred: {e}", parent=self.window)
         finally:
             session.close()
+
+    # ---------------- REPORTS (ADMIN-03) ----------------
+    def build_reports_tab(self, tab):
+        tk.Label(tab, text="Rental Reports", font=("Arial", 20, "bold"), bg=WHITE, fg=TEXT).pack(anchor="w")
+        tk.Label(tab, text="See which cars are booked the most. Leave the dates empty to include every booking, "
+                           "or enter a date range to only count bookings with a pick-up date in that range.",
+                 font=("Arial", 9), bg=WHITE, fg=MUTED).pack(anchor="w", pady=(0, 10))
+
+        # Date range filter
+        top = tk.Frame(tab, bg=WHITE)
+        top.pack(fill=tk.X)
+        tk.Label(top, text="From (mm/dd/yyyy)", font=("Arial", 11), bg=WHITE, fg=TEXT).pack(side=tk.LEFT)
+        self.report_from = tk.Entry(top, font=("Arial", 11), relief="solid", bd=1, width=12)
+        self.report_from.pack(side=tk.LEFT, padx=(6, 14), ipady=2)
+        tk.Label(top, text="To (mm/dd/yyyy)", font=("Arial", 11), bg=WHITE, fg=TEXT).pack(side=tk.LEFT)
+        self.report_to = tk.Entry(top, font=("Arial", 11), relief="solid", bd=1, width=12)
+        self.report_to.pack(side=tk.LEFT, padx=(6, 14), ipady=2)
+        tk.Button(top, text="Run Report", font=("Arial", 11, "bold"), bg=DARK, fg="white",
+                  command=self.load_report).pack(side=tk.LEFT, ipady=1)
+        tk.Button(top, text="Clear Dates", font=("Arial", 11), bg=WHITE, fg=TEXT,
+                  command=self.clear_report_dates).pack(side=tk.LEFT, padx=(8, 0), ipady=1)
+        for entry in (self.report_from, self.report_to):
+            entry.bind("<Return>", lambda event: self.load_report())
+        self.report_error = tk.Label(tab, text="", font=("Arial", 10), bg=WHITE, fg=RED)
+        self.report_error.pack(anchor="w", pady=(4, 0))
+
+        # Summary boxes
+        boxes = tk.Frame(tab, bg=WHITE)
+        boxes.pack(fill=tk.X, pady=(4, 10))
+        self.summary_labels = {}
+        for col, (key, title) in enumerate([("bookings", "Bookings"), ("revenue", "Revenue"),
+                                            ("cancelled", "Cancellations"), ("most_booked", "Most booked car")]):
+            boxes.columnconfigure(col, weight=1, uniform="box")
+            box = tk.Frame(boxes, bg=GREY, padx=14, pady=10)
+            box.grid(row=0, column=col, sticky="nsew", padx=(0, 10) if col < 3 else 0)
+            tk.Label(box, text=title, font=("Arial", 10), bg=GREY, fg=MUTED).pack(anchor="w")
+            self.summary_labels[key] = tk.Label(box, text="-", font=("Arial", 16, "bold"), bg=GREY, fg=TEXT,
+                                                wraplength=220, justify="left")
+            self.summary_labels[key].pack(anchor="w")
+
+        # Table on the left, bar chart on the right
+        bottom = tk.Frame(tab, bg=WHITE)
+        bottom.pack(fill=tk.BOTH, expand=True)
+        headings = [("car", "Car", 190), ("type", "Type", 80), ("bookings", "Bookings", 80),
+                    ("days", "Days Rented", 90), ("cancelled", "Cancelled", 80), ("revenue", "Revenue", 95)]
+        self.report_table = ttk.Treeview(bottom, columns=[h[0] for h in headings], show="headings", height=12)
+        for key, title, width in headings:
+            self.report_table.heading(key, text=title)
+            self.report_table.column(key, width=width, anchor="w" if key == "car" else "center")
+        self.report_table.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+
+        chart_box = tk.Frame(bottom, bg=WHITE, padx=15)
+        chart_box.pack(side=tk.RIGHT, fill=tk.Y)
+        tk.Label(chart_box, text="Bookings per car", font=("Arial", 11, "bold"), bg=WHITE, fg=TEXT).pack(anchor="w")
+        self.chart = tk.Canvas(chart_box, width=360, height=300, bg=WHITE, highlightthickness=0)
+        self.chart.pack()
+
+    def clear_report_dates(self):
+        self.report_from.delete(0, tk.END)
+        self.report_to.delete(0, tk.END)
+        self.load_report()
+
+    def load_report(self):
+        self.report_error.config(text="")
+        dates = []
+        for entry in (self.report_from, self.report_to):
+            text = entry.get().strip()
+            value = None
+            if text:
+                for fmt in ("%m/%d/%Y", "%m/%d/%y", "%Y-%m-%d"):
+                    try:
+                        value = datetime.strptime(text, fmt).date()
+                        break
+                    except ValueError:
+                        pass
+                if value is None:
+                    self.report_error.config(text="Enter dates as mm/dd/yyyy.")
+                    return
+            dates.append(value)
+        if dates[0] and dates[1] and dates[1] < dates[0]:
+            self.report_error.config(text="The 'To' date must be on or after the 'From' date.")
+            return
+
+        session = self.app.Session()
+        try:
+            rows, totals = rental_report(session, dates[0], dates[1])
+        except Exception as e:
+            messagebox.showerror("Error", f"Could not load the report:\n{e}", parent=self.window)
+            return
+        finally:
+            session.close()
+
+        # Summary boxes
+        self.summary_labels["bookings"].config(text=str(totals["bookings"]))
+        self.summary_labels["revenue"].config(text=f"${totals['revenue']:,.2f}")
+        self.summary_labels["cancelled"].config(text=str(totals["cancelled"]))
+        self.summary_labels["most_booked"].config(text=totals["most_booked"])
+
+        # Table
+        self.report_table.delete(*self.report_table.get_children())
+        for r in rows:
+            self.report_table.insert("", tk.END, iid=str(r["car_id"]), values=(
+                f"#{r['car_id']} {r['car']}", r["type"], r["bookings"], r["days"], r["cancelled"],
+                f"${r['revenue']:,.2f}"))
+
+        self.draw_chart(rows)
+
+    def draw_chart(self, rows):
+        """Simple bar chart: one bar per car, longest bar = most bookings"""
+        self.chart.delete("all")
+        if not rows:
+            return
+        most = max(r["bookings"] for r in rows) or 1
+        bar_height = min(28, int(280 / len(rows)) - 6)
+        label_width = 150
+        max_bar = 360 - label_width - 40
+        for i, r in enumerate(rows):
+            y = 10 + i * (bar_height + 6)
+            name = f"#{r['car_id']} {r['car'].split(' ', 1)[1]}"  # e.g. #1 Toyota Corolla
+            self.chart.create_text(label_width - 8, y + bar_height / 2, text=name, anchor="e",
+                                   font=("Arial", 9), fill=TEXT)
+            length = int(max_bar * r["bookings"] / most)
+            if length > 0:
+                self.chart.create_rectangle(label_width, y, label_width + length, y + bar_height,
+                                            fill=DARK, outline=DARK)
+            self.chart.create_text(label_width + length + 6, y + bar_height / 2, text=str(r["bookings"]),
+                                   anchor="w", font=("Arial", 9, "bold"), fill=TEXT)
