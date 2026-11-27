@@ -1,11 +1,11 @@
-"""CAR-01.3 - Active car listing data. Leaves out removed cars."""
+"""CAR-01.3 - Active car listing data.
+Uses the team's search_cars() from car_search.py, which only returns cars
+with status 'Available' (removed/unavailable cars are left out).
+"""
 from sqlalchemy.orm import Session
-from models import Car
+from car_search import search_cars
 
 
 def get_active_cars(session: Session):
-    """All active cars (not removed, not in maintenance), cheapest first."""
-    return (session.query(Car)
-            .filter(Car.is_active.is_(True), Car.status != "Maintenance")
-            .order_by(Car.daily_rate, Car.make, Car.model)
-            .all())
+    """All cars customers can see, cheapest first."""
+    return search_cars(session)

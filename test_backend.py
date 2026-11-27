@@ -13,10 +13,10 @@ Base.metadata.create_all(engine)
 s = sessionmaker(bind=engine)()
 
 s.add(Location(location_name="Campus", address="75 University Ave W", city="Waterloo",
-                state_province="Ontario", postal_code="N2L 3C5"))
+               state_province="Ontario", postal_code="N2L 3C5"))
 s.add_all([Car(make="Toyota", model="Corolla", year=2022, car_type="Economy", daily_rate=45, location_id=1),
-            Car(make="Toyota", model="RAV4", year=2023, car_type="SUV", daily_rate=70, location_id=1),
-            Car(make="Old", model="Removed", year=2010, car_type="Sedan", daily_rate=20, location_id=1, is_active=False)])
+           Car(make="Toyota", model="RAV4", year=2023, car_type="SUV", daily_rate=70, location_id=1),
+           Car(make="Old", model="Removed", year=2010, car_type="Sedan", daily_rate=20, location_id=1, is_active=False)])
 s.commit()
 
 # --- ACC-01.3
