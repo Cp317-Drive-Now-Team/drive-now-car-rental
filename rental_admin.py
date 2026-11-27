@@ -2,7 +2,7 @@ from sqlalchemy.orm import Session
 from models import Reservation, Car
 import rental_status
 import payment_rules
-from booking_service import payments_for
+from booking_service import payments_for, is_picked_up
 from auth_service import app_session, update_rental_status_secure
 
 
@@ -11,17 +11,8 @@ def is_admin():
 
 
 def picked_up(session: Session, booking: Reservation):
-    """
-    The database has no 'picked up' column, so we use the car's status: when an admin marks a rental as
-    picked up, the car is set to 'Rented'. Only the car's earliest open booking counts as the one picked up.
-    """
-    if booking.status not in ('Pending', 'Confirmed') or booking.car.status != 'Rented':
-        return False
-    first_open = session.query(Reservation).filter(
-        Reservation.car_id == booking.car_id,
-        Reservation.status.in_(('Pending', 'Confirmed'))
-    ).order_by(Reservation.start_date).first()
-    return first_open is not None and first_open.reservation_id == booking.reservation_id
+    """Checks if the rental was picked up (the check itself is in booking_service.py)"""
+    return is_picked_up(session, booking)
 
 
 def list_rentals(session: Session, status_filter: str = None):
